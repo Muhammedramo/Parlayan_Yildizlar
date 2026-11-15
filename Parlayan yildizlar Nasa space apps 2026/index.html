@@ -1,0 +1,2822 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090d16">
+  <title>Parlayan Yıldızlar: Martian map</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d16;
+      --panel: rgba(17, 24, 38, .92);
+      --line: rgba(180, 199, 224, .13);
+      --muted: #8d9bb2;
+      --text: #edf3fc;
+      --orange: #ff8a50;
+      --cyan: #66d9e8;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 48% -15%, rgba(52, 73, 111, .24), transparent 50%),
+        var(--bg);
+    }
+
+    button { font: inherit; }
+
+    .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar {
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 34px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(9, 13, 22, .82);
+    }
+
+    .brand { display: flex; align-items: center; gap: 13px; }
+
+    .nasa-mark {
+      width: 43px;
+      height: 43px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.55);
+      border-radius: 50%;
+      color: white;
+      background: radial-gradient(circle at 34% 30%, #4786c9, #14457d 72%);
+      box-shadow: 0 0 22px rgba(49, 126, 207, .18);
+      font-weight: 900;
+      font-size: 15px;
+      font-style: italic;
+      letter-spacing: -1.5px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .nasa-mark::before {
+      content: "";
+      position: absolute;
+      width: 55px;
+      height: 1.5px;
+      background: #f05056;
+      transform: rotate(-35deg);
+      box-shadow: 0 0 3px rgba(255,255,255,.45);
+    }
+
+    .nasa-mark span { position: relative; z-index: 1; text-shadow: 0 1px 3px #18395d; }
+
+    .brand-caption {
+      color: #a7b3c5;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .19em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(16px, 2vw, 21px);
+      font-weight: 620;
+      letter-spacing: -.025em;
+    }
+
+    .title-accent { color: #ffad7c; }
+
+    .topbar-right { display: flex; align-items: center; gap: 22px; }
+    .mission-status { display: flex; align-items: center; gap: 8px; color: #aeb9ca; font-size: 11px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #64d7a1; box-shadow: 0 0 10px #64d7a1; }
+    .icon-button {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: #b7c3d4;
+      background: rgba(255,255,255,.025);
+      cursor: pointer;
+    }
+    .icon-button:hover { border-color: rgba(255,255,255,.3); color: white; }
+
+    main { flex: 1; display: flex; flex-direction: column; padding: 24px 30px 20px; }
+
+    .page-intro {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 18px;
+      margin: 0 2px 17px;
+    }
+    .eyebrow { color: #8290a7; font: 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+    .page-intro h2 { margin: 6px 0 0; font-size: 15px; font-weight: 550; color: #dce5f1; }
+    .page-meta { text-align: right; color: var(--muted); font: 10px var(--mono); line-height: 1.8; }
+    .page-meta strong { color: #c8d3e2; font-weight: 500; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 294px;
+      gap: 16px;
+      min-height: 590px;
+      flex: 1;
+    }
+
+    .map-panel, .side-panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: 0 14px 50px rgba(0,0,0,.16);
+    }
+
+    .map-panel { min-height: 590px; position: relative; background: #342b26; }
+    .map-stage { position: absolute; inset: 0; overflow: hidden; background: #342b26; cursor: grab; touch-action: none; }
+    .map-stage.dragging { cursor: grabbing; }
+    .terrain-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .wind-field { position: absolute; inset: 0; z-index: 2; display: none; width: 100%; height: 100%; pointer-events: none; }
+    .wind-field.active { display: block; }
+    .map-status {
+      position: absolute;
+      z-index: 3;
+      top: 57px;
+      left: 17px;
+      padding: 6px 9px;
+      border-radius: 5px;
+      color: #fff;
+      background: rgba(36,31,28,.72);
+      font: 9px var(--mono);
+      pointer-events: none;
+    }
+    .map-status:empty { display: none; }
+
+    .map-toolbar {
+      z-index: 4;
+      position: absolute;
+      top: 16px;
+      left: 17px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .map-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      padding: 0 11px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 8px;
+      background: rgba(13,16,24,.78);
+      backdrop-filter: blur(10px);
+      color: #e8edf5;
+      font: 10px var(--mono);
+    }
+    .map-pill .small-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 8px var(--orange); }
+
+    .map-tools {
+      z-index: 4;
+      position: absolute;
+      right: 16px;
+      top: 16px;
+      display: grid;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 9px;
+      background: rgba(13,16,24,.8);
+      backdrop-filter: blur(10px);
+    }
+    .map-tools button { width: 35px; height: 34px; border: 0; border-bottom: 1px solid rgba(255,255,255,.1); color: #d4ddeb; background: transparent; cursor: pointer; font-size: 17px; }
+    .map-tools button:last-child { border-bottom: 0; }
+    .map-tools button:hover { background: rgba(255,255,255,.1); }
+
+    .map-caption {
+      z-index: 4;
+      position: absolute;
+      left: 18px;
+      bottom: 17px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: rgba(255,240,225,.86);
+      font: 10px var(--mono);
+      text-shadow: 0 1px 4px #321f1b;
+      pointer-events: none;
+    }
+    .caption-line { width: 24px; height: 2px; background: #fff0dd; }
+    .map-hint {
+      z-index: 4;
+      position: absolute;
+      right: 16px;
+      bottom: 17px;
+      color: rgba(255,240,225,.82);
+      font: 9px var(--mono);
+      text-shadow: 0 1px 4px #321f1b;
+      pointer-events: none;
+    }
+    .map-legend {
+      z-index: 4;
+      position: absolute;
+      right: 16px;
+      bottom: 42px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 8px;
+      border: 1px solid rgba(70,43,35,.18);
+      border-radius: 5px;
+      color: #51463f;
+      background: rgba(255,255,255,.92);
+      font: 8px var(--mono);
+      pointer-events: none;
+    }
+    .map-legend i { width: 52px; height: 7px; background: linear-gradient(90deg, #53665b, #bba06c, #e1d3b5); }
+    .placeholder-stamp {
+      position: absolute;
+      z-index: 3;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) rotate(-12deg);
+      color: rgba(255,240,220,.37);
+      border: 1px solid rgba(255,240,220,.24);
+      padding: 7px 12px;
+      font: 10px var(--mono);
+      letter-spacing: .18em;
+      pointer-events: none;
+    }
+
+    .selected-point {
+      display: none;
+      z-index: 3;
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 1px solid white;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 0 5px rgba(255,255,255,.18), 0 0 24px rgba(255,255,255,.55);
+      pointer-events: none;
+    }
+    .selected-point::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: white; }
+
+    .side-panel { display: flex; flex-direction: column; }
+    .panel-section { padding: 18px; border-bottom: 1px solid var(--line); }
+    .panel-section:last-child { border-bottom: 0; }
+    .section-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .section-heading h3 { margin: 0; color: #e9eff8; font-size: 12px; font-weight: 600; }
+    .section-tag { color: #7e8ba0; font: 9px var(--mono); text-transform: uppercase; letter-spacing: .09em; }
+
+    .layer-list { display: grid; gap: 7px; }
+    .layer-button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 10px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      text-align: left;
+      color: #aeb9ca;
+      background: rgba(255,255,255,.025);
+      cursor: pointer;
+      transition: .18s ease;
+    }
+    .layer-button:hover { background: rgba(255,255,255,.055); color: #eff4fc; }
+    .layer-button.active { color: #f2f6fc; border-color: rgba(255,138,80,.34); background: rgba(255,138,80,.085); }
+    .layer-icon { width: 29px; height: 29px; flex: 0 0 29px; display: grid; place-items: center; border-radius: 8px; font-size: 14px; background: rgba(255,255,255,.06); }
+    .layer-button.active .layer-icon { background: rgba(255,138,80,.15); }
+    .layer-copy { flex: 1; }
+    .layer-name { display: block; color: inherit; font-size: 11px; font-weight: 560; }
+    .layer-desc { display: block; margin-top: 3px; color: #77859a; font-size: 9px; }
+    .radio { width: 13px; height: 13px; border: 1px solid #627086; border-radius: 50%; }
+    .active .radio { border: 4px solid #ff9a67; }
+
+    .coordinates {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #92a0b4;
+      background: rgba(0,0,0,.12);
+      font: 10px var(--mono);
+    }
+    .coordinates strong { color: #e1e9f4; font-weight: 500; }
+    .helper-text { margin: 9px 0 0; color: #7c899e; font-size: 10px; line-height: 1.5; }
+
+    .readout-grid { display: grid; gap: 8px; }
+    .readout {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.018);
+    }
+    .readout-label { display: flex; align-items: center; gap: 8px; color: #aeb9ca; font-size: 10px; }
+    .readout-mark { width: 7px; height: 7px; border-radius: 2px; background: var(--mark); }
+    .readout-value { color: #e5ecf6; font: 10px var(--mono); }
+    .readout-value.pending { color: #78869b; }
+    .data-note { color: #75839a; font-size: 9px; line-height: 1.5; margin: 10px 0 0; }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 3px 0;
+      color: #748198;
+      font: 9px var(--mono);
+    }
+    .footer span { display: flex; align-items: center; gap: 7px; }
+    .footer a { color: #9daabd; text-decoration: none; }
+
+    @media (max-width: 900px) {
+      main { padding: 18px 16px; }
+      .workspace { grid-template-columns: minmax(0, 1fr) 260px; gap: 12px; }
+      .topbar { padding: 0 18px; }
+      .panel-section { padding: 14px; }
+    }
+    @media (max-width: 680px) {
+      .topbar { height: 66px; padding: 0 14px; }
+      .nasa-mark { width: 38px; height: 38px; }
+      .brand-caption, .mission-status { display: none; }
+      .topbar-right { gap: 0; }
+      main { padding: 16px 12px; }
+      .page-intro { align-items: flex-start; }
+      .page-meta { max-width: 130px; }
+      .workspace { display: flex; flex-direction: column; }
+      .map-panel { min-height: 54vh; }
+      .side-panel { display: grid; grid-template-columns: 1fr 1fr; }
+      .panel-section { padding: 14px; }
+      .panel-section:nth-child(2) { border-right: 0; }
+      .panel-section:last-child { grid-column: 1 / -1; }
+      .readout-grid { grid-template-columns: 1fr 1fr; }
+      .footer { flex-wrap: wrap; }
+    }
+    @media (max-width: 430px) {
+      h1 { font-size: 15px; }
+      .map-pill { font-size: 9px; padding: 0 8px; }
+      .page-meta { font-size: 8px; }
+      .side-panel { display: flex; }
+      .readout-grid { grid-template-columns: 1fr 1fr; }
+      .map-panel { min-height: 48vh; }
+    }
+
+    :root {
+      color-scheme: light;
+      --bg: #f3f1ec;
+      --panel: #fff;
+      --line: #e4e0d8;
+      --muted: #77746e;
+      --text: #292a28;
+      --orange: #b9583e;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .topbar {
+      height: 68px;
+      padding: 0 28px;
+      border-color: var(--line);
+      background: #fff;
+    }
+
+    .nasa-mark {
+      width: auto;
+      height: auto;
+      display: block;
+      overflow: visible;
+      border: 0;
+      border-radius: 0;
+      color: #174b78;
+      background: none;
+      box-shadow: none;
+      font-size: 20px;
+      letter-spacing: -1.5px;
+    }
+
+    .nasa-mark::before { display: none; }
+    .nasa-mark span { text-shadow: none; }
+    .brand-caption { color: #77746e; font-size: 9px; letter-spacing: .11em; }
+    h1 { color: #292a28; font-size: 19px; font-weight: 600; }
+    .title-accent { color: #a64f38; }
+    .mission-status { color: #77746e; font-size: 11px; }
+    .live-dot { background: #82956b; box-shadow: none; }
+
+    .icon-button {
+      border-color: var(--line);
+      border-radius: 6px;
+      color: #545650;
+      background: #fff;
+    }
+    .icon-button:hover { border-color: #b8b2a7; color: #20211f; }
+
+    main { padding: 22px 28px 18px; }
+    .page-intro { margin-bottom: 14px; }
+    .eyebrow {
+      color: #77746e;
+      font: 10px var(--mono);
+      letter-spacing: .04em;
+      text-transform: none;
+    }
+    .page-intro h2 { color: #363733; font-size: 16px; font-weight: 600; }
+    .page-meta { color: #77746e; font-size: 9px; }
+    .page-meta strong { color: #3e403c; }
+
+    .workspace { grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; }
+    .map-panel, .side-panel {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: none;
+    }
+    .map-panel { background: #b9674d; }
+    .map-stage { background: #b9674d; }
+    .map-pill {
+      min-height: 30px;
+      border-color: rgba(70,43,35,.18);
+      border-radius: 5px;
+      background: rgba(255,255,255,.92);
+      color: #38332f;
+      font: 10px var(--mono);
+      backdrop-filter: none;
+    }
+    .map-pill .small-dot { background: #a9523f; box-shadow: none; }
+    .map-tools {
+      border-color: rgba(70,43,35,.18);
+      border-radius: 5px;
+      background: rgba(255,255,255,.94);
+      backdrop-filter: none;
+    }
+    .map-tools button { border-color: #e9e4dc; color: #46433e; }
+    .map-tools button:hover { background: #f2efe9; }
+    .map-caption {
+      color: white;
+      font: 11px "Segoe UI", Arial, sans-serif;
+      text-shadow: 0 1px 3px rgba(43,28,21,.55);
+    }
+    .caption-line { background: #fff; }
+    .map-hint { color: rgba(255,255,255,.8); text-shadow: 0 1px 3px rgba(43,28,21,.55); }
+    .placeholder-stamp {
+      transform: translate(-50%, -50%);
+      border-color: rgba(255,255,255,.5);
+      color: rgba(255,255,255,.8);
+      padding: 6px 9px;
+      font: 10px var(--mono);
+      letter-spacing: .04em;
+    }
+    .placeholder-stamp { display: none; }
+    .selected-point {
+      border-color: #fff;
+      box-shadow: 0 0 0 3px rgba(50,35,28,.26);
+    }
+    .selected-point::after { background: #fff; }
+
+    .panel-section { padding: 17px; border-color: var(--line); }
+    .section-heading { margin-bottom: 12px; }
+    .section-heading h3 { color: #343531; font-size: 13px; font-weight: 600; }
+    .section-tag { display: none; }
+    .layer-list { gap: 4px; }
+    .layer-button {
+      gap: 10px;
+      padding: 9px 8px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      color: #555650;
+      background: transparent;
+      transition: background .15s ease;
+    }
+    .layer-button:hover { background: #f5f3ef; color: #2e302c; }
+    .layer-button.active {
+      border-color: #e4d6ce;
+      color: #773f30;
+      background: #f7f1ed;
+    }
+    .layer-icon {
+      display: none;
+    }
+    .layer-button { border-radius: 4px; }
+    .layer-name { font-size: 11px; font-weight: 600; }
+    .layer-desc { color: #817d75; font-size: 10px; }
+    .radio { width: 12px; height: 12px; border-color: #aaa59b; }
+    .active .radio { border: 3px solid #a9523f; }
+
+    .coordinates, .readout {
+      border-color: var(--line);
+      border-radius: 5px;
+      background: #faf9f7;
+    }
+    .coordinates { color: #77746e; }
+    .coordinates strong { color: #343531; }
+    .helper-text { color: #77746e; font-size: 11px; }
+    .readout-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .readout { align-items: flex-start; flex-direction: column; gap: 7px; padding: 9px; }
+    .readout-label { color: #666760; font-size: 10px; }
+    .readout-mark { border-radius: 50%; background: #a9523f; }
+    .readout-value { color: #343531; font-size: 10px; }
+    .readout-value.pending { color: #858178; }
+    .data-note { color: #77746e; font-size: 10px; }
+    .footer { color: #77746e; font: 10px "Segoe UI", Arial, sans-serif; }
+    .footer a { color: #555650; }
+    .api-key-panel {
+      margin-top: 12px;
+      padding-top: 11px;
+      border-top: 1px solid var(--line);
+    }
+    .api-key-panel summary {
+      color: #555650;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .api-key-form { display: flex; gap: 6px; margin-top: 9px; }
+    .api-key-form input {
+      min-width: 0;
+      flex: 1;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: var(--text);
+      background: #fff;
+      font: 10px var(--mono);
+    }
+    .api-key-form button {
+      padding: 0 10px;
+      border: 1px solid #a9523f;
+      border-radius: 4px;
+      color: #fff;
+      background: #a9523f;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .api-key-help { margin: 7px 0 0; color: #77746e; font-size: 9px; line-height: 1.4; }
+    @media (max-width: 900px) {
+      main { padding: 18px 16px; }
+      .workspace { grid-template-columns: minmax(0, 1fr) 270px; }
+      .topbar { padding: 0 18px; }
+    }
+    @media (max-width: 680px) {
+      .topbar { padding: 0 14px; }
+      .workspace { display: flex; flex-direction: column; }
+      .side-panel { display: grid; grid-template-columns: 1fr 1fr; }
+      .panel-section:last-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 430px) {
+      h1 { font-size: 15px; }
+      .page-meta { font-size: 8px; }
+      .side-panel { display: flex; }
+      .readout-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    :root {
+      --bg: #f3f5f7;
+      --panel: #fff;
+      --line: #e2e7ec;
+      --muted: #687789;
+      --text: #202b36;
+      --orange: #a64e35;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    body {
+      background: #f3f5f7;
+      color: #202b36;
+    }
+
+    .topbar {
+      position: relative;
+      height: 72px;
+      padding: 0 clamp(18px, 3vw, 44px);
+      border-color: #e1e6eb;
+      background: #fff;
+      box-shadow: 0 1px 5px rgba(24, 39, 55, .035);
+    }
+
+    .brand { gap: 12px; }
+    .brand-caption { color: #667586; letter-spacing: .12em; }
+    h1 { color: #1e2d3b; font-size: clamp(17px, 1.8vw, 21px); }
+    .title-accent { color: #a64e35; }
+    .mission-status { color: #647386; }
+
+    main {
+      width: min(100%, 1760px);
+      margin: 0 auto;
+      padding: 25px clamp(16px, 2.4vw, 38px) 20px;
+    }
+
+    .page-intro {
+      align-items: center;
+      margin: 0 2px 20px;
+    }
+
+    .eyebrow {
+      color: #68798a;
+      font: 10px var(--mono);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .page-intro h2 {
+      margin-top: 7px;
+      color: #253443;
+      font-size: clamp(20px, 2vw, 27px);
+      font-weight: 620;
+      letter-spacing: -.025em;
+    }
+
+    .page-meta {
+      padding: 9px 13px;
+      border: 1px solid #e1e6ea;
+      border-radius: 8px;
+      color: #687789;
+      background: #fff;
+      font-size: 9px;
+      line-height: 1.9;
+    }
+
+    .page-meta strong { color: #344556; font-weight: 650; }
+
+    .workspace {
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 390px);
+      align-items: start;
+      gap: 18px;
+      min-height: 0;
+    }
+
+    .map-panel, .side-panel {
+      border: 1px solid #dfe5ea;
+      border-radius: 13px;
+      background: #fff;
+      box-shadow: 0 4px 16px rgba(26, 43, 61, .055);
+    }
+
+    .map-panel {
+      height: min(76vh, 880px);
+      min-height: 570px;
+      background: #342b26;
+    }
+
+    .map-stage, .map-panel { overflow: hidden; }
+    .map-toolbar { top: 16px; left: 16px; gap: 8px; }
+
+    .map-pill {
+      min-height: 32px;
+      padding: 0 11px;
+      border-color: rgba(31, 42, 52, .12);
+      border-radius: 7px;
+      color: #263545;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 2px 8px rgba(17, 26, 33, .08);
+      font-size: 9px;
+      letter-spacing: .035em;
+    }
+
+    .map-tools {
+      top: 16px;
+      right: 16px;
+      border: 1px solid rgba(31,42,52,.14);
+      border-radius: 8px;
+      background: rgba(255,255,255,.97);
+      box-shadow: 0 2px 9px rgba(17,26,33,.1);
+    }
+
+    .map-tools button {
+      width: 38px;
+      height: 38px;
+      border-bottom-color: #e8ebee;
+      color: #35475a;
+    }
+
+    .map-tools button:hover { background: #f0f3f6; }
+    .map-status { top: 58px; left: 16px; }
+
+    .map-legend {
+      right: 16px;
+      bottom: 43px;
+      gap: 8px;
+      padding: 8px 10px;
+      border-color: rgba(31,42,52,.14);
+      border-radius: 7px;
+      color: #455465;
+      box-shadow: 0 2px 8px rgba(17,26,33,.1);
+      font-size: 8px;
+    }
+
+    .map-legend i { width: 64px; height: 8px; border-radius: 4px; }
+
+    .map-hint {
+      right: 16px;
+      bottom: 15px;
+      color: rgba(255,255,255,.95);
+      font-size: 9px;
+    }
+
+    .map-caption {
+      left: 17px;
+      bottom: 16px;
+      font-size: 10px;
+    }
+
+    .map-stage.selecting-location { cursor: crosshair; }
+
+    .location-marker {
+      position: absolute;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .location-marker[hidden] { display: none; }
+
+    .location-marker::before {
+      content: "";
+      width: 15px;
+      height: 15px;
+      flex: 0 0 15px;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px var(--marker-color), 0 2px 8px rgba(19,31,42,.35);
+      background: var(--marker-color);
+    }
+
+    .location-marker span {
+      padding: 4px 7px;
+      border: 1px solid rgba(255,255,255,.8);
+      border-radius: 5px;
+      color: #263545;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 2px 8px rgba(19,31,42,.16);
+      font-size: 10px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .current-marker { --marker-color: #168273; }
+    .destination-marker { --marker-color: #ba5941; }
+
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      max-height: min(76vh, 880px);
+      overflow: auto;
+      scrollbar-color: #c6ced6 transparent;
+      scrollbar-width: thin;
+    }
+
+    .panel-section {
+      padding: 17px 18px;
+      border-color: #e8ecf0;
+    }
+
+    .section-heading { margin-bottom: 12px; }
+
+    .section-heading h3 {
+      color: #273746;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: -.01em;
+    }
+
+    .section-tag {
+      display: inline;
+      color: #8390a0;
+      font: 9px var(--mono);
+      letter-spacing: .08em;
+    }
+
+    .layer-list { gap: 5px; }
+
+    .layer-button {
+      min-height: 53px;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: #455465;
+      background: #f8f9fa;
+      transition: border-color .16s ease, background .16s ease, color .16s ease;
+    }
+
+    .layer-button:hover {
+      border-color: #dce3e9;
+      color: #243444;
+      background: #f3f6f8;
+    }
+
+    .layer-button.active {
+      border-color: #d8c6bd;
+      color: #793f2e;
+      background: #f8f2ef;
+    }
+
+    .layer-icon {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      border-radius: 7px;
+      color: #5b6c7d;
+      background: #edf1f4;
+      font-size: 14px;
+    }
+
+    .layer-button.active .layer-icon { color: #914931; background: #efe1da; }
+    .layer-name { font-size: 11px; font-weight: 650; }
+    .layer-desc { color: #788696; font-size: 9px; }
+    .radio { flex: 0 0 13px; border-color: #a7b2bd; }
+    .active .radio { border: 4px solid #a9523f; }
+
+    .route-actions { display: grid; gap: 8px; }
+
+    .route-button {
+      display: flex;
+      width: 100%;
+      min-height: 51px;
+      align-items: center;
+      gap: 11px;
+      padding: 8px 11px;
+      border: 1px solid #dfe6ea;
+      border-radius: 8px;
+      color: #324454;
+      text-align: left;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+
+    .route-button:hover { border-color: #b7c4ce; background: #f8fafb; }
+
+    .route-button[aria-pressed="true"] {
+      border-color: #578b81;
+      background: #f1f8f6;
+      box-shadow: inset 3px 0 #168273;
+    }
+
+    .destination-action[aria-pressed="true"] {
+      border-color: #c38b7b;
+      background: #fbf4f1;
+      box-shadow: inset 3px 0 #ba5941;
+    }
+
+    .route-button-icon {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      place-items: center;
+      border-radius: 7px;
+      color: #167668;
+      background: #e6f1ef;
+      font-size: 18px;
+    }
+
+    .destination-action .route-button-icon { color: #a64e35; background: #f5e9e4; }
+    .route-button strong { display: block; font-size: 11px; font-weight: 650; }
+    .route-button small { display: block; margin-top: 3px; color: #7a8795; font-size: 9px; }
+    .route-hint { margin-top: 9px; }
+
+    .coordinates {
+      min-height: 37px;
+      align-items: center;
+      padding: 8px 10px;
+      border-color: #e4e9ed;
+      border-radius: 7px;
+      color: #708091;
+      background: #f8f9fa;
+      font-size: 9px;
+    }
+
+    .coordinates strong { color: #344657; font-weight: 600; }
+    .place-state { color: #168273; font: 9px var(--mono); letter-spacing: .06em; }
+    .place-state.destination-state { color: #a64e35; }
+
+    .place-readout-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .place-readout-grid .readout {
+      min-height: 52px;
+      gap: 5px;
+      padding: 8px;
+      border-color: #e7ebee;
+      border-radius: 7px;
+      background: #fbfcfc;
+    }
+
+    .place-readout-grid .readout-label { color: #687786; font-size: 9px; }
+    .place-readout-grid .readout-mark { width: 6px; height: 6px; }
+    .place-readout-grid .readout-value { color: #2e3e4d; font-size: 9px; }
+    .place-hint { margin-top: 8px; }
+
+    .helper-text { color: #788695; font-size: 10px; }
+    .readout-grid { gap: 7px; }
+
+    .readout {
+      border-color: #e7ebee;
+      border-radius: 7px;
+      background: #fbfcfc;
+    }
+
+    .readout-label { color: #687786; font-size: 10px; }
+    .readout-value { color: #2e3e4d; font-size: 10px; }
+    .data-note { color: #788695; font-size: 9px; }
+
+    .api-key-panel { border-color: #e8ecf0; }
+    .api-key-panel summary { color: #4a5b6c; font-size: 10px; }
+    .api-key-form input { border-radius: 6px; }
+    .api-key-form button { min-height: 34px; border-radius: 6px; }
+
+    button:focus-visible, summary:focus-visible, .map-stage:focus-visible {
+      outline: 3px solid rgba(38, 112, 160, .38);
+      outline-offset: 2px;
+    }
+
+    .footer {
+      padding-top: 15px;
+      color: #788695;
+      font: 9px "Segoe UI", Arial, sans-serif;
+    }
+
+    .footer a { color: #526579; }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 1080px) {
+      .workspace { grid-template-columns: minmax(0, 1fr) 340px; gap: 13px; }
+      .panel-section { padding: 15px; }
+    }
+
+    @media (max-width: 820px) {
+      .workspace { display: flex; flex-direction: column; }
+      .map-panel { width: 100%; height: 62vh; min-height: 470px; }
+      .side-panel { width: 100%; max-height: none; overflow: visible; }
+      .panel-section:nth-child(2) { border-right: 0; }
+      .panel-section:last-child { grid-column: auto; }
+    }
+
+    @media (max-width: 560px) {
+      .topbar { height: 64px; gap: 10px; padding: 0 12px; }
+      .brand-caption, .mission-status { display: none; }
+      .nasa-mark { width: auto; height: auto; border: 0; border-radius: 0; color: #174b78; background: none; box-shadow: none; font-size: 18px; }
+      .nasa-mark::before { display: none; }
+      .nasa-mark span { text-shadow: none; }
+      h1 { font-size: 15px; }
+      .topbar-right { gap: 0; }
+      main { padding: 17px 12px 16px; }
+      .page-intro { align-items: flex-start; gap: 8px; }
+      .page-intro h2 { font-size: 19px; }
+      .page-meta { max-width: 125px; padding: 7px 8px; font-size: 8px; }
+      .map-panel { height: 57vh; min-height: 400px; }
+      .map-toolbar { top: 10px; left: 10px; gap: 5px; }
+      .map-pill { min-height: 28px; padding: 0 8px; font-size: 8px; }
+      .map-tools { top: 10px; right: 10px; }
+      .map-tools button { width: 34px; height: 34px; }
+      .map-legend { right: 10px; bottom: 40px; }
+      .map-hint { right: 10px; bottom: 12px; font-size: 8px; }
+      .map-caption { left: 10px; bottom: 12px; max-width: 45%; font-size: 9px; }
+      .panel-section { padding: 15px 13px; }
+      .layer-button { min-height: 49px; }
+      .route-actions { grid-template-columns: 1fr 1fr; }
+      .route-button { min-height: 58px; gap: 7px; padding: 7px; }
+      .route-button-icon { width: 26px; height: 26px; flex-basis: 26px; }
+      .route-button strong { font-size: 10px; }
+      .route-button small { font-size: 8px; }
+      .footer { align-items: flex-start; flex-direction: column; }
+    }
+
+    :root {
+      --bg: #edf0f2;
+      --panel: #fff;
+      --line: #dce2e6;
+      --muted: #64717c;
+      --text: #28343d;
+      --orange: #a64e35;
+    }
+
+    body { background: #edf0f2; color: #28343d; }
+
+    .topbar {
+      height: 62px;
+      padding: 0 clamp(16px, 2.4vw, 36px);
+      border-color: #dce2e6;
+      background: #fff;
+      box-shadow: none;
+    }
+
+    .brand { gap: 10px; }
+    .brand-caption { color: #697681; font-size: 8px; }
+    h1 { color: #26333d; font-size: clamp(16px, 1.6vw, 19px); }
+    .title-accent { color: #a64e35; }
+    .mission-status { color: #687681; font-size: 10px; }
+    .live-dot { box-shadow: none; }
+    .icon-button { border-color: #dce2e6; border-radius: 5px; background: #fff; }
+
+    main { padding: 11px clamp(14px, 2vw, 30px) 8px; }
+
+    .page-intro {
+      align-items: center;
+      margin: 0 2px 9px;
+    }
+
+    .eyebrow { color: #6c7881; font-size: 9px; letter-spacing: .1em; }
+    .page-intro h2 { margin-top: 4px; color: #283640; font-size: 19px; font-weight: 600; }
+    .page-meta { padding: 5px 9px; border-color: #dce2e6; border-radius: 5px; background: #fff; font-size: 8px; }
+    .page-meta strong { color: #34434e; }
+
+    .workspace {
+      grid-template-columns: minmax(0, 1fr) minmax(330px, 360px);
+      align-items: stretch;
+      gap: 11px;
+      min-height: 0;
+      flex: 0 0 auto;
+    }
+
+    .map-panel, .side-panel {
+      border: 1px solid #dce2e6;
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: none;
+    }
+
+    .map-panel {
+      height: min(88vh, 1080px);
+      min-height: 570px;
+      align-self: start;
+      border-color: #d1d8dd;
+      border-radius: 7px;
+    }
+
+    .side-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas:
+        "layers"
+        "route"
+        "current"
+        "inspect"
+        "readings"
+        "wind";
+      grid-template-rows: repeat(6, max-content);
+      align-content: start;
+      align-items: stretch;
+      gap: 7px;
+      height: auto;
+      min-height: 0;
+      max-height: none;
+      overflow: visible;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .side-panel > section:first-of-type { grid-area: layers; }
+    .planning-section { grid-area: route; }
+    #currentLocationPanel { grid-area: current; }
+    #destinationPanel { grid-area: destination; }
+    #mapSelectionPanel { grid-area: inspect; }
+    #surfaceReadingsPanel { grid-area: readings; }
+    #windDustPanel { grid-area: wind; }
+
+    .side-panel.has-destination {
+      grid-template-areas:
+        "layers"
+        "route"
+        "current"
+        "destination"
+        "inspect"
+        "readings"
+        "wind";
+      grid-template-rows: repeat(7, max-content);
+      align-content: start;
+      height: auto;
+      overflow: visible;
+    }
+
+    .panel-section {
+      min-width: 0;
+      padding: 9px 10px;
+      overflow: hidden;
+      border: 1px solid #dce2e6;
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: none;
+    }
+
+    .section-heading { margin-bottom: 6px; }
+    .section-heading h3 { color: #293741; font-size: 12px; font-weight: 650; letter-spacing: 0; }
+    .section-tag { display: none; }
+
+    .layer-list { gap: 2px; }
+    .layer-button {
+      min-height: 34px;
+      gap: 6px;
+      padding: 4px 6px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      background: #f7f8f8;
+    }
+
+    .layer-button:hover { border-color: #d8dfe3; background: #f0f3f4; }
+    .layer-button.active { border-color: #dbc8bf; color: #773f30; background: #f7f2ef; }
+    .layer-icon { display: grid; width: 20px; height: 20px; flex-basis: 20px; border-radius: 4px; font-size: 11px; }
+    .layer-button.active .layer-icon { background: #efe1da; }
+    .layer-name { font-size: 10px; font-weight: 650; }
+    .layer-desc { margin-top: 1px; color: #75818a; font-size: 8px; }
+    .radio { width: 10px; height: 10px; flex-basis: 10px; }
+    .active .radio { border-width: 3px; }
+
+    .route-actions { grid-template-columns: 1fr; gap: 4px; }
+    .route-button {
+      min-height: 33px;
+      gap: 7px;
+      padding: 4px 6px;
+      border-color: #dce2e6;
+      border-radius: 4px;
+    }
+
+    .route-button-icon { width: 21px; height: 21px; flex-basis: 21px; border-radius: 4px; font-size: 13px; }
+    .route-button strong { font-size: 10px; font-weight: 650; }
+    .route-button small { margin-top: 0; font-size: 8px; }
+    .route-hint, .helper-text { margin-top: 5px; color: #75818a; font-size: 9px; line-height: 1.25; }
+
+    .coordinates {
+      min-height: 28px;
+      padding: 5px 7px;
+      border-color: #e0e5e8;
+      border-radius: 4px;
+      color: #6f7a82;
+      background: #f7f8f8;
+      font-size: 9px;
+    }
+
+    .coordinates strong { color: #34414a; font-weight: 600; }
+    .place-state { font-size: 8px; }
+
+    .route-distance {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-top: 5px;
+      padding: 7px 8px;
+      border: 1px solid #e3e7e9;
+      border-left: 3px solid #a64e35;
+      border-radius: 4px;
+      color: #69767f;
+      background: #f7f5f3;
+      font-size: 8px;
+    }
+
+    .route-distance span { font-weight: 650; letter-spacing: .025em; text-transform: uppercase; }
+    .route-distance strong { color: #34414a; font: 650 11px var(--mono); text-align: right; }
+
+    .hazard-alert {
+      display: grid;
+      gap: 3px;
+      margin-top: 6px;
+      padding: 6px 7px;
+      border-left: 3px solid #b18437;
+      border-radius: 3px;
+      color: #51472f;
+      background: #faf6ed;
+    }
+
+    .hazard-alert[data-state="idle"] {
+      border-left-color: #9aa5ac;
+      color: #53616a;
+      background: #f5f7f7;
+    }
+
+    .hazard-alert[data-state="warning"] {
+      border-left-color: #a64e35;
+      color: #63392f;
+      background: #fbefec;
+    }
+
+    .hazard-title-row { display: flex; align-items: center; gap: 5px; }
+    .hazard-title-row strong { font-size: 9px; font-weight: 700; }
+
+    .hazard-mark {
+      display: grid;
+      width: 14px;
+      height: 14px;
+      flex: 0 0 14px;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: #98722d;
+      font: 700 9px var(--mono);
+    }
+
+    .hazard-alert[data-state="idle"] .hazard-mark { background: #73818a; }
+    .hazard-alert[data-state="warning"] .hazard-mark { background: #a64e35; }
+    .hazard-alert p { margin: 0; font-size: 8px; line-height: 1.25; }
+
+    .place-readout-grid, .readout-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px;
+      margin-top: 5px;
+    }
+
+    .place-readout-grid .readout, .readout {
+      min-width: 0;
+      min-height: 32px;
+      gap: 3px;
+      padding: 4px 5px;
+      border-color: #e5e8ea;
+      border-radius: 4px;
+      background: #fafbfb;
+    }
+
+    .place-readout-grid .readout-label, .readout-label { gap: 4px; color: #68747c; font-size: 8px; line-height: 1.1; }
+    .place-readout-grid .readout-mark, .readout-mark { width: 5px; height: 5px; flex: 0 0 5px; }
+    .place-readout-grid .readout-value, .readout-value { color: #303e47; font-size: 9px; line-height: 1.1; }
+
+    .place-readout-grid .readout:nth-child(5), .readout-grid .readout:nth-child(5) {
+      grid-column: 1 / -1;
+    }
+
+    .place-hint, .data-note { margin: 5px 0 0; color: #748089; font-size: 8px; line-height: 1.25; }
+    .api-key-panel { margin-top: 5px; padding-top: 4px; border-color: #e3e7e9; }
+    .api-key-panel summary { color: #57656e; font-size: 8px; }
+    .api-key-form { gap: 4px; margin-top: 5px; }
+    .api-key-form input { padding: 5px; font-size: 8px; }
+    .api-key-form button { min-height: 24px; padding: 0 7px; font-size: 8px; }
+    .api-key-help { margin-top: 4px; font-size: 8px; }
+
+    .wind-toggle {
+      display: flex;
+      width: 100%;
+      min-height: 34px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 8px;
+      border: 1px solid #dce2e6;
+      border-radius: 4px;
+      color: #34434e;
+      background: #f7f8f8;
+      cursor: pointer;
+    }
+
+    .wind-toggle[aria-pressed="true"] { border-color: #9ab9b8; background: #eef6f5; }
+    .wind-toggle-label { font-size: 9px; font-weight: 650; }
+    .wind-toggle-control { display: flex; align-items: center; gap: 7px; }
+    .wind-toggle-state { color: #748089; font: 8px var(--mono); }
+    .wind-toggle[aria-pressed="true"] .wind-toggle-state { color: #267c72; }
+    .wind-switch {
+      position: relative;
+      width: 28px;
+      height: 16px;
+      border-radius: 8px;
+      background: #c7d0d5;
+      transition: background .16s ease;
+    }
+    .wind-switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(25, 41, 52, .22);
+      transition: transform .16s ease;
+    }
+    .wind-toggle[aria-pressed="true"] .wind-switch { background: #39877d; }
+    .wind-toggle[aria-pressed="true"] .wind-switch::after { transform: translateX(12px); }
+    .wind-readout-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 5px; }
+    .wind-map-control { position: absolute; z-index: 5; right: 16px; bottom: 76px; width: 150px; }
+
+    .map-scale {
+      position: absolute;
+      z-index: 4;
+      left: 16px;
+      bottom: 43px;
+      display: grid;
+      width: max-content;
+      gap: 4px;
+      padding: 5px 7px;
+      border: 1px solid rgba(31, 42, 52, .14);
+      border-radius: 4px;
+      color: #33424c;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 1px 5px rgba(17,26,33,.12);
+      font: 8px var(--mono);
+      pointer-events: none;
+    }
+
+    .map-scale-labels { display: flex; justify-content: space-between; gap: 12px; }
+    .map-scale-line {
+      display: block;
+      height: 5px;
+      border-right: 1px solid #263741;
+      border-left: 1px solid #263741;
+      background: #263741;
+    }
+
+    .map-caption { left: 16px; bottom: 14px; font-size: 9px; }
+    .map-legend { bottom: 42px; }
+    .footer { padding: 6px 2px 0; color: #71808a; font-size: 8px; }
+    .footer a { color: #52636f; }
+
+    @media (max-width: 1100px) and (min-width: 901px) {
+      .workspace { grid-template-columns: minmax(0, 1fr) 320px; gap: 8px; }
+      .side-panel { gap: 5px; }
+      .panel-section { padding: 8px; }
+    }
+
+    @media (max-width: 900px) {
+      main { padding: 12px 14px; }
+      .workspace { display: flex; flex-direction: column; gap: 9px; }
+      .map-panel { width: 100%; height: min(76vh, 880px); min-height: 470px; aspect-ratio: auto; align-self: stretch; }
+      .side-panel {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        grid-template-rows: auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+          "layers route"
+          "current inspect"
+          "readings readings"
+          "wind wind";
+        grid-template-rows: repeat(4, auto);
+      }
+
+      .side-panel.has-destination {
+        grid-template-areas:
+          "layers route"
+          "current destination"
+          "inspect readings"
+          "wind wind";
+        grid-template-rows: repeat(4, auto);
+      }
+
+      .panel-section { min-height: 150px; }
+    }
+
+    @media (max-width: 560px) {
+      .topbar { height: 58px; padding: 0 12px; }
+      .brand-caption, .mission-status { display: none; }
+      .nasa-mark { font-size: 18px; }
+      h1 { font-size: 15px; }
+      main { padding: 10px; }
+      .page-intro { align-items: flex-start; gap: 8px; }
+      .page-intro h2 { font-size: 17px; }
+      .page-meta { max-width: 125px; padding: 5px 6px; font-size: 7px; }
+      .map-panel { height: 57vh; min-height: 400px; }
+      .map-toolbar { top: 10px; left: 10px; gap: 5px; }
+      .map-pill { min-height: 27px; padding: 0 7px; font-size: 8px; }
+      .map-tools { top: 10px; right: 10px; }
+      .map-tools button { width: 32px; height: 32px; }
+      .map-scale { left: 10px; bottom: 40px; }
+      .map-caption { left: 10px; bottom: 12px; }
+      .map-legend { right: 10px; bottom: 40px; }
+      .side-panel, .side-panel.has-destination {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "layers"
+          "route"
+          "current"
+          "inspect"
+          "readings"
+          "wind";
+        grid-template-rows: repeat(6, auto);
+      }
+
+      .side-panel.has-destination {
+        grid-template-areas:
+          "layers"
+          "route"
+          "current"
+          "destination"
+          "inspect"
+          "readings"
+          "wind";
+        grid-template-rows: repeat(7, auto);
+      }
+      .panel-section { min-height: 0; }
+      .footer { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (min-width: 901px) and (max-height: 820px) {
+      .topbar { height: 56px; }
+      main { padding-top: 6px; padding-bottom: 4px; }
+      .page-intro { margin-bottom: 6px; }
+      .footer { padding-top: 3px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand" aria-label="NASA">
+        <div class="nasa-mark" aria-hidden="true"><span>NASA</span></div>
+        <div class="brand-caption">Exploration<br>Systems</div>
+      </div>
+      <h1><span class="title-accent">Parlayan Yıldızlar:</span> Martian map</h1>
+      <div class="topbar-right">
+        <div class="mission-status"><span class="live-dot"></span> Mars surface explorer</div>
+        <button class="icon-button" id="resetButton" type="button" aria-label="Reset selected point" title="Reset selected point">⌖</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-intro" aria-label="Map information">
+        <div>
+          <div class="eyebrow">Mars · Elysium Planitia</div>
+          <h2>Parlayan Yıldızlar: Mars Map</h2>
+        </div>
+        <div class="page-meta"><div>BODY <strong>MARS</strong></div><div>REGION <strong>ELYSIUM PLANITIA</strong></div></div>
+      </section>
+
+      <section class="workspace" aria-label="Interactive Mars map and data">
+        <div class="map-panel">
+          <div class="map-stage" id="mapStage" role="application" tabindex="0" aria-label="Interactive NASA imagery map of Elysium Planitia on Mars. Drag to pan, scroll to zoom, or click to inspect a location.">
+            <canvas class="terrain-canvas" id="terrainCanvas" aria-label="Optical map layer of Elysium Planitia"></canvas>
+            <canvas class="wind-field" id="windField" aria-hidden="true"></canvas>
+            <div class="selected-point" id="selectedPoint" aria-hidden="true"></div>
+            <div class="location-marker current-marker" id="currentMarker" aria-hidden="true" hidden><span>Current</span></div>
+            <div class="location-marker destination-marker" id="destinationMarker" aria-hidden="true" hidden><span>Destination</span></div>
+            <div class="map-status" id="mapStatus" role="status" aria-live="polite"></div>
+
+            <div class="map-toolbar">
+              <div class="map-pill"><span class="small-dot"></span> ELYSIUM PLANITIA</div>
+              <div class="map-pill" id="activeLayerLabel">OPTICAL</div>
+            </div>
+            <div class="map-tools" aria-label="Map controls">
+              <button id="zoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+              <button id="zoomOut" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+              <button id="resetView" type="button" aria-label="Reset map view" title="Reset map view">⟲</button>
+            </div>
+            <div class="map-caption" id="mapCaption">Click the map to inspect a point</div>
+            <div class="map-scale" aria-label="Map scale and zoom level">
+              <div class="map-scale-labels">
+                <span id="mapScaleDistance">— km</span>
+                <span id="mapZoomLevel">1.0×</span>
+              </div>
+              <span class="map-scale-line" id="mapScaleLine" aria-hidden="true"></span>
+            </div>
+            <div class="map-legend" aria-label="Map color scale">
+              <span id="legendLow">LOWLAND</span><i id="legendGradient"></i><span id="legendHigh">HIGHLAND</span>
+            </div>
+            <div class="wind-map-control" aria-label="Map overlays">
+              <button class="wind-toggle" id="windVectorToggle" type="button" aria-label="Toggle wind vector overlay" aria-pressed="false">
+                <span class="wind-toggle-label">Winds</span>
+                <span class="wind-toggle-control">
+                  <span class="wind-toggle-state" id="windToggleState">OFF</span>
+                  <span class="wind-switch" aria-hidden="true"></span>
+                </span>
+              </button>
+            </div>
+            <div class="map-hint">DRAG TO PAN · SCROLL TO ZOOM</div>
+          </div>
+        </div>
+
+        <aside class="side-panel">
+          <section class="panel-section">
+            <div class="section-heading"><h3>Map layers</h3><span class="section-tag">01 / 04</span></div>
+            <div class="layer-list" role="group" aria-label="Select map layer">
+              <button class="layer-button" type="button" data-layer="topographic" aria-pressed="false">
+                <span class="layer-icon">⌁</span><span class="layer-copy"><span class="layer-name">Topographic</span><span class="layer-desc">NASA MOLA / HRSC shaded relief</span></span><span class="radio"></span>
+              </button>
+              <button class="layer-button active" type="button" data-layer="optical" aria-pressed="true">
+                <span class="layer-icon">◉</span><span class="layer-copy"><span class="layer-name">Optical</span><span class="layer-desc">NASA Viking MDIM21 mosaic</span></span><span class="radio"></span>
+              </button>
+              <button class="layer-button" type="button" data-layer="thermal" aria-pressed="false">
+                <span class="layer-icon">◒</span><span class="layer-copy"><span class="layer-name">Thermal</span><span class="layer-desc">Curved regional hot &amp; cool zones</span></span><span class="radio"></span>
+              </button>
+              <button class="layer-button" type="button" data-layer="radiation" aria-pressed="false">
+                <span class="layer-icon">✳</span><span class="layer-copy"><span class="layer-name">Radiation</span><span class="layer-desc">Curved exposure gradient</span></span><span class="radio"></span>
+              </button>
+            </div>
+          </section>
+
+          <section class="panel-section planning-section">
+            <div class="section-heading"><h3>Route points</h3><span class="section-tag">PLAN</span></div>
+            <div class="route-actions">
+              <button class="route-button current-action" id="setCurrentLocationButton" type="button" aria-pressed="false">
+                <span class="route-button-icon" aria-hidden="true">◎</span>
+                <span><strong>Set current location</strong><small>Choose your starting point</small></span>
+              </button>
+              <button class="route-button destination-action" id="addDestinationButton" type="button" aria-pressed="false">
+                <span class="route-button-icon" aria-hidden="true">＋</span>
+                <span><strong>Add destination</strong><small>Choose a place to go</small></span>
+              </button>
+            </div>
+            <div class="route-distance" id="routeDistancePanel" aria-live="polite" hidden>
+              <span>Distance between locations</span>
+              <strong id="routeDistance">—</strong>
+            </div>
+            <p class="helper-text route-hint" id="routeHint" aria-live="polite">Choose a point, then click the map to place it.</p>
+          </section>
+
+          <section class="panel-section place-section" id="currentLocationPanel">
+            <div class="section-heading">
+              <h3>Current location</h3><span class="place-state" id="currentStatus">NOT SET</span>
+            </div>
+            <div class="coordinates"><span>LAT <strong id="currentLatitude">—</strong></span><span>LON <strong id="currentLongitude">—</strong></span></div>
+            <div class="readout-grid place-readout-grid">
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#c7a2ff"></i>Elevation</span><span class="readout-value pending" id="currentElevation">— m</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#7bc9ff"></i>Surface</span><span class="readout-value pending" id="currentOptical">—</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#ff9b72"></i>Temperature</span><span class="readout-value pending" id="currentThermal">— °C</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#7bc9ff"></i>Pressure</span><span class="readout-value pending" id="currentPressure">— Pa</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#f3d16f"></i>Radiation</span><span class="readout-value pending" id="currentRadiation">— mSv/day</span></div>
+            </div>
+            <p class="helper-text place-hint" id="currentLocationHint">Set a point on the map to see its readings.</p>
+          </section>
+
+          <section class="panel-section place-section destination-panel" id="destinationPanel" hidden>
+            <div class="section-heading">
+              <h3>Destination</h3><span class="place-state destination-state" id="destinationStatus">ADDED</span>
+            </div>
+            <div class="coordinates"><span>LAT <strong id="destinationLatitude">—</strong></span><span>LON <strong id="destinationLongitude">—</strong></span></div>
+            <div class="readout-grid place-readout-grid">
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#c7a2ff"></i>Elevation</span><span class="readout-value pending" id="destinationElevation">— m</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#7bc9ff"></i>Surface</span><span class="readout-value pending" id="destinationOptical">—</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#ff9b72"></i>Temperature</span><span class="readout-value pending" id="destinationThermal">— °C</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#7bc9ff"></i>Pressure</span><span class="readout-value pending" id="destinationPressure">— Pa</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#f3d16f"></i>Radiation</span><span class="readout-value pending" id="destinationRadiation">— mSv/day</span></div>
+            </div>
+            <p class="helper-text place-hint" id="destinationHint">Destination readings are estimated at the selected point.</p>
+          </section>
+
+          <section class="panel-section" id="mapSelectionPanel">
+            <div class="section-heading"><h3>Map selection</h3><span class="section-tag">INSPECT</span></div>
+            <div class="coordinates"><span>LAT <strong id="latitude">—</strong></span><span>LON <strong id="longitude">—</strong></span></div>
+            <p class="helper-text" id="locationHint">Click the map to inspect a point. Drag to pan; use the wheel or controls to zoom.</p>
+            <div class="hazard-alert" id="hazardAlert" data-state="idle" role="status" aria-live="polite">
+              <div class="hazard-title-row">
+                <span class="hazard-mark" aria-hidden="true">i</span>
+                <strong id="hazardTitle">No warning</strong>
+              </div>
+              <p id="hazardSummary">Select a location to check for warnings.</p>
+            </div>
+          </section>
+
+          <section class="panel-section" id="surfaceReadingsPanel">
+            <div class="section-heading"><h3>Surface readings</h3><span class="section-tag">MARS</span></div>
+            <div class="readout-grid">
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#c7a2ff"></i>Elevation</span><span class="readout-value pending" id="elevation">— m</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#7bc9ff"></i>Optical</span><span class="readout-value pending" id="optical">—</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#ff9b72"></i>Air temperature</span><span class="readout-value pending" id="thermal">— °C</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#7bc9ff"></i>Pressure</span><span class="readout-value pending" id="pressure">— Pa</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#f3d16f"></i>Radiation</span><span class="readout-value pending" id="radiation">—</span></div>
+            </div>
+            <p class="data-note" id="dataNote">Elevation is sampled from the NASA MOLA/HRSC DEM. Temperature and radiation are illustrative models; their point readings use the same fixed geographic color gradients as the maps.</p>
+            <details class="api-key-panel">
+              <summary>Connect NASA InSight weather</summary>
+              <form class="api-key-form" id="apiKeyForm">
+                <input id="apiKeyInput" type="password" autocomplete="off" aria-label="NASA API key" placeholder="Enter NASA API key" required>
+                <button type="submit">Load</button>
+              </form>
+              <p class="api-key-help">The key is used only in this page and sent directly to api.nasa.gov.</p>
+            </details>
+          </section>
+
+          <section class="panel-section" id="windDustPanel">
+            <div class="section-heading"><h3>Wind &amp; dust</h3></div>
+            <div class="readout-grid wind-readout-grid">
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#39877d"></i>Wind speed</span><span class="readout-value" id="windSpeed">— m/s</span></div>
+              <div class="readout"><span class="readout-label"><i class="readout-mark" style="--mark:#b18437"></i>Dust speed</span><span class="readout-value" id="dustSpeed">— m/s</span></div>
+            </div>
+            <p class="data-note" id="windDustLocation">Map center estimate.</p>
+            <p class="data-note">Illustrative model only; not live measurements.</p>
+          </section>
+        </aside>
+      </section>
+
+      <footer class="footer">
+        <span>Parlayan Yıldızlar <span>·</span> Mars surface data viewer</span>
+        <span><a href="https://trek.nasa.gov/mars/" target="_blank" rel="noopener noreferrer">NASA Mars Trek</a> · Viking MDIM21 (232 m) / MOLA-HRSC relief (200 m)</span>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const mapStage = document.getElementById("mapStage");
+    const terrainCanvas = document.getElementById("terrainCanvas");
+    const mapContext = terrainCanvas.getContext("2d");
+    const windField = document.getElementById("windField");
+    const windContext = windField.getContext("2d");
+    const pointMarker = document.getElementById("selectedPoint");
+    const layerLabel = document.getElementById("activeLayerLabel");
+    const mapCaption = document.getElementById("mapCaption");
+    const locationHint = document.getElementById("locationHint");
+    const hazardAlert = document.getElementById("hazardAlert");
+    const hazardTitle = document.getElementById("hazardTitle");
+    const hazardMark = hazardAlert.querySelector(".hazard-mark");
+    const hazardSummary = document.getElementById("hazardSummary");
+    const apiKeyForm = document.getElementById("apiKeyForm");
+    const mapStatus = document.getElementById("mapStatus");
+    const windVectorToggle = document.getElementById("windVectorToggle");
+    const windToggleState = document.getElementById("windToggleState");
+    const windSpeedReadout = document.getElementById("windSpeed");
+    const dustSpeedReadout = document.getElementById("dustSpeed");
+    const windDustLocation = document.getElementById("windDustLocation");
+    const currentMarker = document.getElementById("currentMarker");
+    const destinationMarker = document.getElementById("destinationMarker");
+    const routeHint = document.getElementById("routeHint");
+    const destinationPanel = document.getElementById("destinationPanel");
+    const sidePanel = document.querySelector(".side-panel");
+    const setCurrentLocationButton = document.getElementById("setCurrentLocationButton");
+    const addDestinationButton = document.getElementById("addDestinationButton");
+    const legendLow = document.getElementById("legendLow");
+    const legendHigh = document.getElementById("legendHigh");
+    const legendGradient = document.getElementById("legendGradient");
+    const mapImages = {
+      optical: new Image(),
+      topographic: new Image()
+    };
+    const overlayCanvases = new Map();
+    const thematicOverlaySize = { width: 540, height: 360 };
+    const mapImageBounds = { west: 125, east: 155, south: -3, north: 17 };
+    const windPatternSeed = Math.random() * Math.PI * 2;
+    const craterWindAttractors = [
+      { longitude: 142.1, latitude: 12.4, radius: 0.075, strength: 0.6 },
+      { longitude: 141.3, latitude: 8.9, radius: 0.065, strength: 0.3 },
+      { longitude: 150.1, latitude: 9.7, radius: 0.07, strength: 0.34 },
+      { longitude: 134.4, latitude: 10.7, radius: 0.06, strength: 0.27 },
+      { longitude: 129.2, latitude: 6.8, radius: 0.065, strength: 0.28 },
+      { longitude: 148.6, latitude: 4.3, radius: 0.06, strength: 0.25 }
+    ];
+    const insightLandingSite = { longitude: 131.97, latitude: 3.6 };
+    const marsMeanRadiusKm = 3389.5;
+    const metersPerDegreeLatitude = Math.PI * marsMeanRadiusKm * 1000 / 180;
+    const windMotionScale = 9000;
+    const mapWindParticleCount = 180;
+    const windReadoutParticleCount = 450;
+    const referenceWindMotionScale = 15000;
+    const referenceWindParticleCount = 900;
+    const illustrativeSuitLimits = {
+      minimumTemperatureC: -55,
+      maximumTemperatureC: 15,
+      maximumRadiationMsvPerDay: 0.52
+    };
+    const pixelCanvas = document.createElement("canvas");
+    const pixelContext = pixelCanvas.getContext("2d", { willReadFrequently: true });
+    const mapLayers = {
+      optical: {
+        low: "DARKER", high: "BRIGHTER",
+        colors: ["#633d36", "#a85842", "#cf8060", "#ddb087"],
+        image: "optical"
+      },
+      topographic: {
+        low: "LOWLAND", high: "HIGHLAND",
+        colors: ["#344f4b", "#84916e", "#c5a873", "#e7d8b8"],
+        image: "topographic"
+      },
+      thermal: {
+        low: "−80°C", high: "+20°C",
+        colors: ["#2459c6", "#438ed1", "#72bfd2", "#d1c75e", "#f6a43a", "#d9572b"],
+        image: "optical"
+      },
+      radiation: {
+        low: "0.15", high: "0.75 mSv/day",
+        colors: ["#204fa8", "#2979c5", "#36a6a1", "#9cb947", "#e2b34a", "#d95a31"],
+        image: "optical"
+      }
+    };
+    const initialView = { longitude: 140, latitude: 7, zoom: 1 };
+    let mapView = { ...initialView };
+    let activeLayer = "optical";
+    let windVectorsEnabled = false;
+    let windGrid = null;
+    let windParticles = [];
+    let windAnimationFrame = 0;
+    let windLastFrame = 0;
+    let windViewWidth = 0;
+    let windViewHeight = 0;
+    let windLastView = null;
+    let windReadingKey = null;
+    let selectedLocation = null;
+    let dragStart = null;
+    let suppressMapClick = false;
+    let suppressMapClickTimer = 0;
+    let renderRequest = 0;
+    let insightWeather = null;
+    let deviceScale = 1;
+    const readingRequestIds = { selected: 0, current: 0, destination: 0 };
+    const placeLocations = { current: null, destination: null };
+    let mapPickMode = null;
+    let elevationLookupId = 0;
+    const pendingElevationLookups = new Map();
+    const elevationCache = new Map();
+
+    function clamp(value, minimum, maximum) {
+      return Math.min(maximum, Math.max(minimum, value));
+    }
+
+    function getViewBounds(viewport) {
+      const aspectRatio = viewport.width / viewport.height;
+      let longitudeSpan = (mapImageBounds.east - mapImageBounds.west) / mapView.zoom;
+      let latitudeSpan = (mapImageBounds.north - mapImageBounds.south) / mapView.zoom;
+
+      if (aspectRatio < longitudeSpan / latitudeSpan) {
+        longitudeSpan = latitudeSpan * aspectRatio;
+      } else {
+        latitudeSpan = longitudeSpan / aspectRatio;
+      }
+
+      return {
+        longitudeSpan,
+        latitudeSpan,
+        left: mapView.longitude - longitudeSpan / 2,
+        right: mapView.longitude + longitudeSpan / 2,
+        top: mapView.latitude + latitudeSpan / 2,
+        bottom: mapView.latitude - latitudeSpan / 2
+      };
+    }
+
+    function updateMapScale(viewport, view) {
+      const scaleDistance = document.getElementById("mapScaleDistance");
+      const scaleLine = document.getElementById("mapScaleLine");
+      const zoomLevel = document.getElementById("mapZoomLevel");
+      const latitudeRadians = mapView.latitude * Math.PI / 180;
+      const kilometersPerPixel = (
+        view.longitudeSpan * Math.PI / 180 * marsMeanRadiusKm * Math.cos(latitudeRadians)
+      ) / viewport.width;
+      const targetDistance = kilometersPerPixel * 90;
+      const magnitude = 10 ** Math.floor(Math.log10(targetDistance));
+      const distanceKm = [5, 2, 1]
+        .map((factor) => factor * magnitude)
+        .find((distance) => distance <= targetDistance) || magnitude;
+
+      scaleDistance.textContent = `${distanceKm >= 10 ? Math.round(distanceKm) : Number(distanceKm.toPrecision(2))} km`;
+      scaleLine.style.width = `${Math.max(1, distanceKm / kilometersPerPixel)}px`;
+      zoomLevel.textContent = `${mapView.zoom.toFixed(1)}×`;
+    }
+
+    function surfaceDistanceKm(first, second) {
+      const radians = Math.PI / 180;
+      const latitudeDifference = (second.latitude - first.latitude) * radians;
+      const longitudeDifference = (second.longitude - first.longitude) * radians;
+      const firstLatitude = first.latitude * radians;
+      const secondLatitude = second.latitude * radians;
+      const haversine = clamp(Math.sin(latitudeDifference / 2) ** 2
+        + Math.cos(firstLatitude) * Math.cos(secondLatitude)
+        * Math.sin(longitudeDifference / 2) ** 2, 0, 1);
+      return 2 * marsMeanRadiusKm * Math.atan2(
+        Math.sqrt(haversine),
+        Math.sqrt(1 - haversine)
+      );
+    }
+
+    function updateRouteDistance() {
+      const distancePanel = document.getElementById("routeDistancePanel");
+      const distance = document.getElementById("routeDistance");
+      if (!placeLocations.current || !placeLocations.destination) {
+        distancePanel.hidden = true;
+        return;
+      }
+
+      distancePanel.hidden = false;
+      const distanceKm = surfaceDistanceKm(placeLocations.current, placeLocations.destination);
+      distance.textContent = distanceKm < 1
+        ? `${Math.round(distanceKm * 1000)} m`
+        : `${distanceKm.toFixed(1)} km`;
+    }
+
+    function constrainMapView(viewport) {
+      const view = getViewBounds(viewport);
+      mapView.longitude = clamp(
+        mapView.longitude,
+        mapImageBounds.west + view.longitudeSpan / 2,
+        mapImageBounds.east - view.longitudeSpan / 2
+      );
+      mapView.latitude = clamp(
+        mapView.latitude,
+        mapImageBounds.south + view.latitudeSpan / 2,
+        mapImageBounds.north - view.latitudeSpan / 2
+      );
+    }
+
+    function thematicIndex(layer, longitude, latitude) {
+      const eastward = clamp(
+        (longitude - mapImageBounds.west) / (mapImageBounds.east - mapImageBounds.west),
+        0,
+        1
+      );
+      const northward = clamp(
+        (latitude - mapImageBounds.south) / (mapImageBounds.north - mapImageBounds.south),
+        0,
+        1
+      );
+
+      if (layer === "thermal") {
+        const curvedLatitude = northward
+          + 0.095 * Math.sin(eastward * Math.PI * 2 + northward * Math.PI * 1.4)
+          + 0.035 * Math.sin(eastward * Math.PI * 4 - northward * Math.PI * 2);
+        const northwestWarmZone = 0.4 * Math.exp(
+          -Math.pow((eastward - 0.28) / 0.12, 2)
+          -Math.pow((northward - 0.72) / 0.15, 2)
+        );
+        const southeastWarmZone = 0.29 * Math.exp(
+          -Math.pow((eastward - 0.77) / 0.13, 2)
+          -Math.pow((northward - 0.4) / 0.14, 2)
+        );
+        const northernWarmZone = 0.23 * Math.exp(
+          -Math.pow((eastward - 0.57) / 0.11, 2)
+          -Math.pow((northward - 0.86) / 0.11, 2)
+        );
+        const westernWarmZone = 0.21 * Math.exp(
+          -Math.pow((eastward - 0.1) / 0.12, 2)
+          -Math.pow((northward - 0.3) / 0.13, 2)
+        );
+        const centralCoolZone = 0.19 * Math.exp(
+          -Math.pow((eastward - 0.52) / 0.16, 2)
+          -Math.pow((northward - 0.53) / 0.15, 2)
+        );
+        const northeastCoolZone = 0.14 * Math.exp(
+          -Math.pow((eastward - 0.83) / 0.12, 2)
+          -Math.pow((northward - 0.79) / 0.12, 2)
+        );
+        return clamp(
+          1 - curvedLatitude
+            + northwestWarmZone
+            + southeastWarmZone
+            + northernWarmZone
+            + westernWarmZone
+            - centralCoolZone
+            - northeastCoolZone,
+          0,
+          1
+        );
+      }
+
+      if (layer === "radiation") {
+        const diagonalField = 0.5 * eastward + 0.5 * northward
+          + 0.075 * Math.sin(eastward * Math.PI * 2 + 1) * Math.sin(northward * Math.PI)
+          + 0.025 * Math.sin(eastward * Math.PI * 4 - northward * Math.PI * 2);
+        return clamp(diagonalField, 0, 1);
+      }
+
+      return 0;
+    }
+
+    function parseColor(color) {
+      return [
+        parseInt(color.slice(1, 3), 16),
+        parseInt(color.slice(3, 5), 16),
+        parseInt(color.slice(5, 7), 16)
+      ];
+    }
+
+    function interpolatePalette(palette, value) {
+      const position = clamp(value, 0, 1) * (palette.length - 1);
+      const lower = Math.floor(position);
+      const upper = Math.min(palette.length - 1, lower + 1);
+      const fraction = position - lower;
+      return palette[lower].map((channel, index) =>
+        Math.round(channel + (palette[upper][index] - channel) * fraction)
+      );
+    }
+
+    function createLayerOverlay(layer) {
+      const { width, height } = thematicOverlaySize;
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      canvas.width = width;
+      canvas.height = height;
+      const overlay = context.createImageData(width, height);
+      const data = overlay.data;
+      const palette = mapLayers[layer].colors.map(parseColor);
+      const longitudeByColumn = new Array(width);
+      const latitudeByRow = new Array(height);
+
+      for (let x = 0; x < width; x += 1) {
+        longitudeByColumn[x] = mapImageBounds.west
+          + ((x + 0.5) / width) * (mapImageBounds.east - mapImageBounds.west);
+      }
+      for (let y = 0; y < height; y += 1) {
+        latitudeByRow[y] = mapImageBounds.north
+          - ((y + 0.5) / height) * (mapImageBounds.north - mapImageBounds.south);
+      }
+
+      for (let y = 0; y < height; y += 1) {
+        const latitude = latitudeByRow[y];
+        for (let x = 0; x < width; x += 1) {
+          const color = interpolatePalette(palette, thematicIndex(layer, longitudeByColumn[x], latitude));
+          const pixel = (y * width + x) * 4;
+          data[pixel] = color[0];
+          data[pixel + 1] = color[1];
+          data[pixel + 2] = color[2];
+          data[pixel + 3] = 255;
+        }
+      }
+
+      context.putImageData(overlay, 0, 0);
+      overlayCanvases.set(layer, canvas);
+      return canvas;
+    }
+
+    function paintLayerOverlay(layer, width, height, view) {
+      if (layer !== "thermal" && layer !== "radiation") return;
+
+      const overlayCanvas = overlayCanvases.get(layer) || createLayerOverlay(layer);
+      const sourceX = (view.left - mapImageBounds.west)
+        / (mapImageBounds.east - mapImageBounds.west) * overlayCanvas.width;
+      const sourceY = (mapImageBounds.north - view.top)
+        / (mapImageBounds.north - mapImageBounds.south) * overlayCanvas.height;
+      const sourceWidth = view.longitudeSpan
+        / (mapImageBounds.east - mapImageBounds.west) * overlayCanvas.width;
+      const sourceHeight = view.latitudeSpan
+        / (mapImageBounds.north - mapImageBounds.south) * overlayCanvas.height;
+      mapContext.save();
+      mapContext.globalAlpha = 0.55;
+      mapContext.globalCompositeOperation = "color";
+      mapContext.imageSmoothingEnabled = true;
+      mapContext.imageSmoothingQuality = "high";
+      mapContext.drawImage(
+        overlayCanvas,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        width,
+        height
+      );
+      mapContext.restore();
+    }
+
+    function updateLayerLegend(layerName) {
+      const layer = mapLayers[layerName];
+      legendLow.textContent = layer.low;
+      legendHigh.textContent = layer.high;
+      legendGradient.style.background = `linear-gradient(90deg, ${layer.colors.join(", ")})`;
+    }
+
+    function estimateWind(longitude, latitude) {
+      const eastward = clamp(
+        (longitude - mapImageBounds.west) / (mapImageBounds.east - mapImageBounds.west),
+        0,
+        1
+      );
+      const northward = clamp(
+        (latitude - mapImageBounds.south) / (mapImageBounds.north - mapImageBounds.south),
+        0,
+        1
+      );
+      const phase = eastward * Math.PI * 2 + northward * Math.PI * 1.5;
+      let eastwardFlow = 1;
+      let northwardFlow = 0.16 * Math.sin(phase);
+      [
+        { x: 0.34, y: 0.58, strength: 1.35, spread: 0.075 },
+        { x: 0.73, y: 0.36, strength: -1.05, spread: 0.09 }
+      ].forEach((vortex) => {
+        const dx = eastward - vortex.x;
+        const dy = northward - vortex.y;
+        const influence = vortex.strength * Math.exp(-(dx * dx + dy * dy) / vortex.spread);
+        eastwardFlow -= dy * influence;
+        northwardFlow += dx * influence;
+      });
+      craterWindAttractors.forEach((crater) => {
+        const dx = (crater.longitude - longitude) / (mapImageBounds.east - mapImageBounds.west);
+        const dy = (crater.latitude - latitude) / (mapImageBounds.north - mapImageBounds.south);
+        const influence = Math.exp(-(dx * dx + dy * dy) / (crater.radius * crater.radius));
+        eastwardFlow += (dx / crater.radius) * crater.strength * influence;
+        northwardFlow += (dy / crater.radius) * crater.strength * influence;
+      });
+      const directionNoise =
+        0.055 * Math.sin(longitude * 0.93 - latitude * 0.69 + windPatternSeed) +
+        0.035 * Math.cos(longitude * 1.61 + latitude * 1.17 + windPatternSeed * 0.51);
+      const gustFactor =
+        1 +
+        0.07 * Math.sin(longitude * 0.71 + latitude * 0.43 + windPatternSeed * 0.8) +
+        0.035 * Math.cos(longitude * 1.37 - latitude * 1.91 + windPatternSeed * 1.7);
+      const direction = Math.atan2(northwardFlow, eastwardFlow) + directionNoise;
+      const speed = (5 + 9 * (0.5 + 0.5 * Math.sin(phase))) * gustFactor;
+      const dustSpeed = estimateDustSpeed(speed, latitude);
+      return { direction, speed, dustSpeed };
+    }
+
+    function estimateDustSpeed(speed, latitude) {
+      const northward = clamp(
+        (latitude - mapImageBounds.south) / (mapImageBounds.north - mapImageBounds.south),
+        0,
+        1
+      );
+      return 0.3 + speed * (0.2 + 0.12 * northward);
+    }
+
+    function generateMockWindGrid(columns = 41, rows = 27) {
+      const points = [];
+      for (let row = 0; row < rows; row += 1) {
+        const latitude = mapImageBounds.north
+          - row / (rows - 1) * (mapImageBounds.north - mapImageBounds.south);
+        for (let column = 0; column < columns; column += 1) {
+          const longitude = mapImageBounds.west
+            + column / (columns - 1) * (mapImageBounds.east - mapImageBounds.west);
+          const estimate = estimateWind(longitude, latitude);
+          points.push({
+            lat: latitude,
+            lon: longitude,
+            u: estimate.speed * Math.cos(estimate.direction),
+            v: estimate.speed * Math.sin(estimate.direction)
+          });
+        }
+      }
+      return { points, columns, rows, bounds: { ...mapImageBounds } };
+    }
+
+    function interpolateWind(grid, longitude, latitude) {
+      const gridX = clamp(
+        (longitude - grid.bounds.west) / (grid.bounds.east - grid.bounds.west) * (grid.columns - 1),
+        0,
+        grid.columns - 1
+      );
+      const gridY = clamp(
+        (grid.bounds.north - latitude) / (grid.bounds.north - grid.bounds.south) * (grid.rows - 1),
+        0,
+        grid.rows - 1
+      );
+      const left = Math.floor(gridX);
+      const top = Math.floor(gridY);
+      const right = Math.min(left + 1, grid.columns - 1);
+      const bottom = Math.min(top + 1, grid.rows - 1);
+      const horizontalBlend = gridX - left;
+      const verticalBlend = gridY - top;
+      const topLeft = grid.points[top * grid.columns + left];
+      const topRight = grid.points[top * grid.columns + right];
+      const bottomLeft = grid.points[bottom * grid.columns + left];
+      const bottomRight = grid.points[bottom * grid.columns + right];
+      const bilinear = (component) => {
+        const topValue = topLeft[component] + (topRight[component] - topLeft[component]) * horizontalBlend;
+        const bottomValue = bottomLeft[component] + (bottomRight[component] - bottomLeft[component]) * horizontalBlend;
+        return topValue + (bottomValue - topValue) * verticalBlend;
+      };
+      return { u: bilinear("u"), v: bilinear("v") };
+    }
+
+    function windParticleColor(speedRatio) {
+      const gray = [185, 192, 198];
+      const white = [250, 252, 255];
+      const color = gray.map((channel, index) => Math.round(channel + (white[index] - channel) * speedRatio));
+      return `rgb(${color.join(", ")})`;
+    }
+
+    function windParticleSpawnChance(speed) {
+      return 0.25 + 0.75 * clamp((speed - 4.5) / 11, 0, 1);
+    }
+
+    function createWindParticle() {
+      const maxAge = 2.5 + Math.random() * 3.5;
+      let longitude;
+      let latitude;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        longitude = mapImageBounds.west + Math.random() * (mapImageBounds.east - mapImageBounds.west);
+        latitude = mapImageBounds.south + Math.random() * (mapImageBounds.north - mapImageBounds.south);
+        if (Math.random() < windParticleSpawnChance(estimateWind(longitude, latitude).speed)) break;
+      }
+      return {
+        longitude,
+        latitude,
+        previousLongitude: longitude,
+        previousLatitude: latitude,
+        age: Math.random() * maxAge,
+        maxAge
+      };
+    }
+
+    function animateWindParticles(timestamp) {
+      windAnimationFrame = 0;
+      if (!windVectorsEnabled || !windGrid || !windLastView) return;
+
+      if (windLastFrame && timestamp - windLastFrame < 1000 / 30) {
+        windAnimationFrame = window.requestAnimationFrame(animateWindParticles);
+        return;
+      }
+      const delta = windLastFrame ? Math.min((timestamp - windLastFrame) / 1000, 0.05) : 1 / 30;
+      windLastFrame = timestamp;
+      windContext.globalCompositeOperation = "destination-in";
+      windContext.fillStyle = "rgba(0, 0, 0, 0.94)";
+      windContext.fillRect(0, 0, windViewWidth, windViewHeight);
+      windContext.globalCompositeOperation = "source-over";
+
+      for (let index = 0; index < windParticles.length; index += 1) {
+        const particle = windParticles[index];
+        const wind = interpolateWind(windGrid, particle.longitude, particle.latitude);
+        const speed = Math.hypot(wind.u, wind.v);
+        const speedRatio = clamp(speed / 15, 0, 1);
+        particle.age += delta;
+        particle.previousLongitude = particle.longitude;
+        particle.previousLatitude = particle.latitude;
+        const latitudeRadians = particle.latitude * Math.PI / 180;
+        const metersPerDegreeLongitude = metersPerDegreeLatitude * Math.max(Math.cos(latitudeRadians), 0.1);
+        particle.longitude += wind.u * delta * windMotionScale / metersPerDegreeLongitude;
+        particle.latitude += wind.v * delta * windMotionScale / metersPerDegreeLatitude;
+
+        if (particle.age >= particle.maxAge ||
+            particle.longitude < mapImageBounds.west || particle.longitude > mapImageBounds.east ||
+            particle.latitude < mapImageBounds.south || particle.latitude > mapImageBounds.north) {
+          windParticles[index] = createWindParticle();
+          continue;
+        }
+
+        const previousX = (particle.previousLongitude - windLastView.left) / windLastView.longitudeSpan * windViewWidth;
+        const previousY = (windLastView.top - particle.previousLatitude) / windLastView.latitudeSpan * windViewHeight;
+        const x = (particle.longitude - windLastView.left) / windLastView.longitudeSpan * windViewWidth;
+        const y = (windLastView.top - particle.latitude) / windLastView.latitudeSpan * windViewHeight;
+        if (Math.max(previousX, x) < 0 || Math.min(previousX, x) > windViewWidth ||
+            Math.max(previousY, y) < 0 || Math.min(previousY, y) > windViewHeight) {
+          continue;
+        }
+
+        const ageFade = Math.min(1, particle.age / 0.3, (particle.maxAge - particle.age) / 0.4);
+        const opacity = (0.58 + speedRatio * 0.38) * ageFade;
+        const color = windParticleColor(speedRatio);
+        windContext.globalAlpha = opacity;
+        windContext.strokeStyle = color;
+        windContext.lineWidth = 1 + speedRatio * 1.2;
+        windContext.beginPath();
+        windContext.moveTo(previousX, previousY);
+        windContext.lineTo(x, y);
+        windContext.stroke();
+        windContext.globalAlpha = 1;
+      }
+
+      windContext.globalCompositeOperation = "source-over";
+      windAnimationFrame = window.requestAnimationFrame(animateWindParticles);
+    }
+
+    function updateWindDustReadings() {
+      const location = selectedLocation || mapView;
+      const readingKey = `${selectedLocation ? "selected" : "center"}:${location.longitude}:${location.latitude}:${windGrid ? "grid" : "model"}`;
+      if (readingKey === windReadingKey) return;
+      windReadingKey = readingKey;
+      const wind = windGrid
+        ? interpolateWind(windGrid, location.longitude, location.latitude)
+        : (() => {
+          const estimate = estimateWind(location.longitude, location.latitude);
+          return {
+            u: estimate.speed * Math.cos(estimate.direction),
+            v: estimate.speed * Math.sin(estimate.direction)
+          };
+        })();
+      const densityRatio = windReadoutParticleCount / referenceWindParticleCount;
+      const movementRatio = windMotionScale / referenceWindMotionScale;
+      const speed = Math.hypot(wind.u, wind.v) * Math.sqrt(densityRatio * movementRatio);
+      windSpeedReadout.textContent = `${speed.toFixed(1)} m/s`;
+      dustSpeedReadout.textContent = `${estimateDustSpeed(speed, location.latitude).toFixed(1)} m/s`;
+      windDustLocation.textContent = selectedLocation
+        ? `Selected point · ${formatCoordinate(location.latitude, "N", "S")}, ${formatCoordinate(location.longitude, "E", "W")}`
+        : "Map center estimate.";
+    }
+
+    function updateWindField(view, viewWidth, viewHeight) {
+      if (!windVectorsEnabled) {
+        const wasActive = windField.classList.contains("active");
+        windField.classList.remove("active");
+        if (windAnimationFrame) window.cancelAnimationFrame(windAnimationFrame);
+        windAnimationFrame = 0;
+        windLastFrame = 0;
+        windLastView = null;
+        windParticles = [];
+        if (wasActive) {
+          windContext.setTransform(1, 0, 0, 1, 0, 0);
+          windContext.clearRect(0, 0, windField.width, windField.height);
+        }
+        return;
+      }
+
+      const backingWidth = Math.max(1, Math.round(viewWidth));
+      const backingHeight = Math.max(1, Math.round(viewHeight));
+      const resized = windField.width !== backingWidth || windField.height !== backingHeight;
+      windViewWidth = viewWidth;
+      windViewHeight = viewHeight;
+      if (resized) {
+        windField.width = backingWidth;
+        windField.height = backingHeight;
+        windLastFrame = 0;
+      } else if (windLastView && (
+        windLastView.left !== view.left ||
+        windLastView.top !== view.top ||
+        windLastView.longitudeSpan !== view.longitudeSpan ||
+        windLastView.latitudeSpan !== view.latitudeSpan
+      )) {
+        windContext.setTransform(1, 0, 0, 1, 0, 0);
+        windContext.clearRect(0, 0, windField.width, windField.height);
+        windParticles.forEach((particle) => {
+          particle.previousLongitude = particle.longitude;
+          particle.previousLatitude = particle.latitude;
+        });
+        windLastFrame = 0;
+      }
+
+      windContext.setTransform(1, 0, 0, 1, 0, 0);
+      windContext.lineCap = "round";
+      windContext.globalCompositeOperation = "source-over";
+      if (!windGrid) windGrid = generateMockWindGrid();
+      if (!windParticles.length) {
+        windParticles = Array.from({ length: mapWindParticleCount }, () => createWindParticle());
+      }
+      windLastView = { ...view };
+      windField.classList.add("active");
+      if (!windAnimationFrame) windAnimationFrame = window.requestAnimationFrame(animateWindParticles);
+    }
+
+    function renderMap() {
+      renderRequest = 0;
+      const viewport = mapStage.getBoundingClientRect();
+      if (!viewport.width || !viewport.height) return;
+
+      deviceScale = Math.min(window.devicePixelRatio || 1, 1.5);
+      const width = Math.max(1, Math.round(viewport.width * deviceScale));
+      const height = Math.max(1, Math.round(viewport.height * deviceScale));
+      if (terrainCanvas.width !== width || terrainCanvas.height !== height) {
+        terrainCanvas.width = width;
+        terrainCanvas.height = height;
+      }
+
+      constrainMapView(viewport);
+      const view = getViewBounds(viewport);
+      updateMapScale(viewport, view);
+      const image = mapImages[mapLayers[activeLayer].image];
+      mapContext.setTransform(1, 0, 0, 1, 0, 0);
+      mapContext.clearRect(0, 0, width, height);
+
+      if (image.complete && image.naturalWidth) {
+        const sourceX = ((view.left - mapImageBounds.west) / (mapImageBounds.east - mapImageBounds.west)) * image.naturalWidth;
+        const sourceY = ((mapImageBounds.north - view.top) / (mapImageBounds.north - mapImageBounds.south)) * image.naturalHeight;
+        const sourceWidth = (view.longitudeSpan / (mapImageBounds.east - mapImageBounds.west)) * image.naturalWidth;
+        const sourceHeight = (view.latitudeSpan / (mapImageBounds.north - mapImageBounds.south)) * image.naturalHeight;
+        mapContext.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+        paintLayerOverlay(activeLayer, width, height, view);
+        mapStatus.textContent = "";
+      } else {
+        mapStatus.textContent = "Loading NASA Mars imagery…";
+      }
+
+      mapContext.setTransform(deviceScale, 0, 0, deviceScale, 0, 0);
+      const viewWidth = viewport.width;
+      const viewHeight = viewport.height;
+      const longitudeStart = Math.ceil(view.left / 5) * 5;
+      const latitudeStart = Math.ceil(view.bottom / 5) * 5;
+
+      mapContext.strokeStyle = "rgba(255,250,239,.28)";
+      mapContext.fillStyle = "rgba(255,250,239,.95)";
+      mapContext.lineWidth = 1;
+      mapContext.font = '10px "SFMono-Regular", Consolas, monospace';
+      mapContext.textBaseline = "top";
+      mapContext.shadowColor = "rgba(25,20,18,.8)";
+      mapContext.shadowBlur = 3;
+      mapContext.beginPath();
+      for (let longitude = longitudeStart; longitude <= view.right; longitude += 5) {
+        const x = ((longitude - view.left) / view.longitudeSpan) * viewWidth;
+        mapContext.moveTo(x, 0);
+        mapContext.lineTo(x, viewHeight);
+        mapContext.fillText(`${longitude.toFixed(0)}°E`, x + 3, 5);
+      }
+      for (let latitude = latitudeStart; latitude <= view.top; latitude += 5) {
+        const y = ((view.top - latitude) / view.latitudeSpan) * viewHeight;
+        mapContext.moveTo(0, y);
+        mapContext.lineTo(viewWidth, y);
+        mapContext.fillText(`${latitude.toFixed(0)}°N`, 5, y + 3);
+      }
+      mapContext.stroke();
+
+      updateWindField(view, viewWidth, viewHeight);
+      updateWindDustReadings();
+
+      const insightX = ((insightLandingSite.longitude - view.left) / view.longitudeSpan) * viewWidth;
+      const insightY = ((view.top - insightLandingSite.latitude) / view.latitudeSpan) * viewHeight;
+      if (insightX >= 0 && insightX <= viewWidth && insightY >= 0 && insightY <= viewHeight) {
+        mapContext.beginPath();
+        mapContext.arc(insightX, insightY, 5, 0, Math.PI * 2);
+        mapContext.fillStyle = "#fff8e9";
+        mapContext.fill();
+        mapContext.lineWidth = 2;
+        mapContext.strokeStyle = "#754333";
+        mapContext.stroke();
+        mapContext.fillStyle = "#fff8e9";
+        mapContext.font = '10px "Segoe UI", Arial, sans-serif';
+        mapContext.fillText(
+          `InSight · ${formatCoordinate(insightLandingSite.longitude, "E", "W")}, ${formatCoordinate(insightLandingSite.latitude, "N", "S")}`,
+          insightX + 9,
+          insightY - 15
+        );
+      }
+
+      mapContext.shadowBlur = 0;
+      updateSelectedMarker(view.left, view.top, view.longitudeSpan, view.latitudeSpan);
+      updatePlaceMarker(currentMarker, placeLocations.current, view);
+      updatePlaceMarker(destinationMarker, placeLocations.destination, view);
+      mapContext.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    function requestRender() {
+      if (!renderRequest) renderRequest = window.requestAnimationFrame(renderMap);
+    }
+
+    function updateSelectedMarker(left, top, longitudeSpan, latitudeSpan) {
+      if (!selectedLocation) return;
+      const x = ((selectedLocation.longitude - left) / longitudeSpan) * 100;
+      const y = ((top - selectedLocation.latitude) / latitudeSpan) * 100;
+      pointMarker.style.left = `${x}%`;
+      pointMarker.style.top = `${y}%`;
+      pointMarker.style.display = x >= 0 && x <= 100 && y >= 0 && y <= 100 ? "block" : "none";
+    }
+
+    function updatePlaceMarker(marker, location, view) {
+      if (!location) {
+        marker.hidden = true;
+        return;
+      }
+
+      const x = ((location.longitude - view.left) / view.longitudeSpan) * 100;
+      const y = ((view.top - location.latitude) / view.latitudeSpan) * 100;
+      marker.style.left = `${x}%`;
+      marker.style.top = `${y}%`;
+      marker.hidden = x < 0 || x > 100 || y < 0 || y > 100;
+    }
+
+    function formatCoordinate(value, positive, negative) {
+      return `${Math.abs(value).toFixed(2)}°${value >= 0 ? positive : negative}`;
+    }
+
+    function sampleOpticalTone(longitude, latitude) {
+      const image = mapImages.optical;
+      if (!image.complete || !image.naturalWidth) return "Image unavailable";
+
+      const x = Math.floor(
+        clamp((longitude - mapImageBounds.west) / (mapImageBounds.east - mapImageBounds.west), 0, 1)
+        * (image.naturalWidth - 1)
+      );
+      const y = Math.floor(
+        clamp((mapImageBounds.north - latitude) / (mapImageBounds.north - mapImageBounds.south), 0, 1)
+        * (image.naturalHeight - 1)
+      );
+      pixelCanvas.width = 1;
+      pixelCanvas.height = 1;
+      pixelContext.drawImage(image, x, y, 1, 1, 0, 0, 1, 1);
+      let pixel;
+      try {
+        pixel = pixelContext.getImageData(0, 0, 1, 1).data;
+      } catch (error) {
+        if (error.name !== "SecurityError") throw error;
+        return "Image unavailable";
+      }
+      const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3;
+      if (brightness < 75) return "Dark terrain";
+      if (brightness > 145) return "Bright terrain";
+      return "Mid-tone terrain";
+    }
+
+    function readingFieldId(target, field) {
+      if (target === "selected") return field;
+      return `${target}${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+    }
+
+    function updatePointHint(target, message) {
+      if (target === "selected") {
+        locationHint.textContent = message;
+        return;
+      }
+
+      const hintId = target === "destination" ? "destinationHint" : "currentLocationHint";
+      document.getElementById(hintId).textContent = message;
+    }
+
+    function updateHazardAlert(temperature, radiation) {
+      const alerts = [];
+      if (temperature < illustrativeSuitLimits.minimumTemperatureC) {
+        alerts.push(`Cold: ${temperature.toFixed(1)}°C`);
+      } else if (temperature > illustrativeSuitLimits.maximumTemperatureC) {
+        alerts.push(`Heat: ${temperature.toFixed(1)}°C`);
+      }
+      if (radiation >= illustrativeSuitLimits.maximumRadiationMsvPerDay) {
+        alerts.push(`Radiation: ${radiation.toFixed(2)} mSv/day`);
+      }
+
+      hazardAlert.dataset.state = alerts.length ? "warning" : "advisory";
+      hazardTitle.textContent = alerts.length ? "Warning" : "No warning";
+      hazardMark.textContent = alerts.length ? "!" : "i";
+      hazardSummary.textContent = alerts.length
+        ? alerts.join(" · ")
+        : "No environmental warning at this point.";
+    }
+
+    function applyElevationSample(request, elevation) {
+      if (request.requestId !== readingRequestIds[request.target]) return;
+      const elevationElement = document.getElementById(readingFieldId(request.target, "elevation"));
+      const pressureElement = document.getElementById(readingFieldId(request.target, "pressure"));
+      const pressure = 610 * Math.exp(-elevation / 10500);
+      elevationElement.textContent = `${Math.round(elevation).toLocaleString()} m`;
+      pressureElement.textContent = `${pressure.toFixed(1)} Pa`;
+      elevationElement.classList.remove("pending");
+      pressureElement.classList.remove("pending");
+      updatePointHint(request.target, "Elevation sampled from NASA MOLA/HRSC; other values follow the displayed map models.");
+    }
+
+    function loadElevation(longitude, latitude, requestId, target) {
+      const lookupKey = `${longitude.toFixed(3)},${latitude.toFixed(3)}`;
+      const cachedElevation = elevationCache.get(lookupKey);
+      if (Number.isFinite(cachedElevation)) {
+        applyElevationSample({ requestId, target }, cachedElevation);
+        return;
+      }
+
+      const pendingLookup = pendingElevationLookups.get(lookupKey);
+      if (pendingLookup) {
+        pendingLookup.requests.push({ requestId, target });
+        return;
+      }
+
+      const callbackName = `marsDemCallback${++elevationLookupId}`;
+      const script = document.createElement("script");
+      const lookup = { requests: [{ requestId, target }] };
+      pendingElevationLookups.set(lookupKey, lookup);
+      const url = new URL(
+        "https://trek.nasa.gov/mars/trekarcgis/rest/services/Mars_MOLA_blend200ppx_HRSC_DEM_clon0dd_200mpp_lzw/ImageServer/identify"
+      );
+      url.search = new URLSearchParams({
+        geometry: `${longitude},${latitude}`,
+        geometryType: "esriGeometryPoint",
+        sr: "104905",
+        returnGeometry: "false",
+        returnCatalogItems: "false",
+        f: "json",
+        callback: callbackName
+      }).toString();
+
+      let completed = false;
+      const timeout = window.setTimeout(() => {
+        finishWithError("NASA elevation lookup timed out.");
+      }, 10000);
+
+      function cleanup() {
+        window.clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+        pendingElevationLookups.delete(lookupKey);
+      }
+
+      function finishWithError(message) {
+        if (completed) return;
+        completed = true;
+        cleanup();
+        lookup.requests.forEach((request) => {
+          if (request.requestId !== readingRequestIds[request.target]) return;
+          const elevationElement = document.getElementById(readingFieldId(request.target, "elevation"));
+          const pressureElement = document.getElementById(readingFieldId(request.target, "pressure"));
+          elevationElement.textContent = "Unavailable";
+          pressureElement.textContent = "Unavailable";
+          elevationElement.classList.remove("pending");
+          pressureElement.classList.remove("pending");
+          updatePointHint(request.target, message);
+          if (request.target === "selected") {
+            document.getElementById("dataNote").textContent = `${message} Temperature and radiation still follow the displayed map gradients.`;
+          }
+        });
+      }
+
+      window[callbackName] = (result) => {
+        if (completed) return;
+        completed = true;
+        cleanup();
+        const elevation = result && result.value !== null && result.value !== undefined
+          ? Number(result.value)
+          : NaN;
+        if (Number.isFinite(elevation)) {
+          elevationCache.set(lookupKey, elevation);
+          if (elevationCache.size > 500) {
+            elevationCache.delete(elevationCache.keys().next().value);
+          }
+        }
+        lookup.requests.forEach((request) => {
+          if (request.requestId !== readingRequestIds[request.target]) return;
+          if (!Number.isFinite(elevation)) {
+            const elevationElement = document.getElementById(readingFieldId(request.target, "elevation"));
+            const pressureElement = document.getElementById(readingFieldId(request.target, "pressure"));
+            elevationElement.textContent = "Unavailable";
+            pressureElement.textContent = "Unavailable";
+            elevationElement.classList.remove("pending");
+            pressureElement.classList.remove("pending");
+            updatePointHint(request.target, "NASA MOLA/HRSC has no elevation sample for this point.");
+            return;
+          }
+
+          applyElevationSample(request, elevation);
+        });
+      };
+
+      script.async = true;
+      script.onerror = () => finishWithError("Could not load the NASA MOLA/HRSC elevation sample.");
+      script.src = url.href;
+      document.head.appendChild(script);
+    }
+
+    function showReadings(longitude, latitude, target = "selected") {
+      const requestId = ++readingRequestIds[target];
+      const thermalIndex = thematicIndex("thermal", longitude, latitude);
+      const radiationIndex = thematicIndex("radiation", longitude, latitude);
+      const temperature = -80 + thermalIndex * 100;
+      const radiation = 0.15 + radiationIndex * 0.6;
+      const latitudeElement = document.getElementById(readingFieldId(target, "latitude"));
+      const longitudeElement = document.getElementById(readingFieldId(target, "longitude"));
+      const elevationElement = document.getElementById(readingFieldId(target, "elevation"));
+      const opticalElement = document.getElementById(readingFieldId(target, "optical"));
+      const thermalElement = document.getElementById(readingFieldId(target, "thermal"));
+      const pressureElement = document.getElementById(readingFieldId(target, "pressure"));
+      const radiationElement = document.getElementById(readingFieldId(target, "radiation"));
+
+      latitudeElement.textContent = formatCoordinate(latitude, "N", "S");
+      longitudeElement.textContent = formatCoordinate(longitude, "E", "W");
+      elevationElement.textContent = "Loading…";
+      opticalElement.textContent = sampleOpticalTone(longitude, latitude);
+      thermalElement.textContent = `${temperature.toFixed(1)} °C`;
+      radiationElement.textContent = `${radiation.toFixed(2)} mSv/day`;
+      pressureElement.textContent = "— Pa";
+      [opticalElement, thermalElement, radiationElement].forEach((element) => {
+        element.classList.remove("pending");
+      });
+      [elevationElement, pressureElement].forEach((element) => element.classList.add("pending"));
+      updatePointHint(target, "Sampling the NASA MOLA/HRSC elevation map…");
+      if (target === "selected") {
+        updateHazardAlert(temperature, radiation);
+        mapCaption.textContent = `${formatCoordinate(latitude, "N", "S")} · ${formatCoordinate(longitude, "E", "W")}`;
+        document.getElementById("dataNote").textContent = "Elevation is sampled from NASA MOLA/HRSC; pressure is estimated from altitude. Temperature and radiation use the same fixed map gradients shown above.";
+      }
+      loadElevation(longitude, latitude, requestId, target);
+      if (target === "selected" && insightWeather) {
+        document.getElementById("dataNote").textContent = `InSight weather (Sol ${insightWeather.sol}, ${insightWeather.date}) is lander-only. Point values follow NASA MOLA/HRSC elevation and the displayed map gradients.`;
+      }
+    }
+
+    document.querySelectorAll(".layer-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".layer-button").forEach((item) => {
+          item.classList.remove("active");
+          item.setAttribute("aria-pressed", "false");
+        });
+        button.classList.add("active");
+        button.setAttribute("aria-pressed", "true");
+        activeLayer = button.dataset.layer;
+        layerLabel.textContent = activeLayer.toUpperCase();
+        updateLayerLegend(activeLayer);
+        terrainCanvas.setAttribute("aria-label", `${activeLayer} map layer of Elysium Planitia`);
+        requestRender();
+      });
+    });
+
+    windVectorToggle.addEventListener("click", () => {
+      windVectorsEnabled = !windVectorsEnabled;
+      windVectorToggle.setAttribute("aria-pressed", String(windVectorsEnabled));
+      windToggleState.textContent = windVectorsEnabled ? "ON" : "OFF";
+      requestRender();
+    });
+
+    apiKeyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const apiKey = document.getElementById("apiKeyInput").value.trim();
+      const submitButton = apiKeyForm.querySelector("button");
+      submitButton.disabled = true;
+      submitButton.textContent = "Loading";
+      document.getElementById("dataNote").textContent = "Connecting to NASA's InSight weather feed…";
+
+      try {
+        const url = new URL("https://api.nasa.gov/insight_weather/");
+        url.searchParams.set("api_key", apiKey);
+        url.searchParams.set("feedtype", "json");
+        url.searchParams.set("ver", "1.0");
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`NASA API returned HTTP ${response.status}`);
+        }
+
+        const feed = await response.json();
+        const sols = Array.isArray(feed.sol_keys) ? feed.sol_keys.slice().sort((a, b) => Number(a) - Number(b)) : [];
+        const latestSol = sols[sols.length - 1];
+        const observation = latestSol ? feed[latestSol] : null;
+        const temperature = observation && observation.AT && observation.AT.av;
+        const pressure = observation && observation.PRE && observation.PRE.av;
+        if (!Number.isFinite(temperature) || !Number.isFinite(pressure)) {
+          throw new Error("The InSight feed has no temperature and pressure readings.");
+        }
+
+        const observationDate = observation.Last_UTC
+          ? new Date(observation.Last_UTC).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+          : "date unavailable";
+        insightWeather = { sol: latestSol, date: observationDate };
+        document.getElementById("dataNote").textContent = `InSight station weather: ${temperature.toFixed(1)} °C and ${pressure.toFixed(1)} Pa (Sol ${latestSol}, ${observationDate}). It does not replace the selected-point values.`;
+      } catch (error) {
+        document.getElementById("dataNote").textContent = `Could not load InSight weather: ${error.message}`;
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "Load";
+      }
+    });
+
+    function selectMapLocation(event) {
+      const viewport = mapStage.getBoundingClientRect();
+      const view = getViewBounds(viewport);
+      const x = clamp((event.clientX - viewport.left) / viewport.width, 0, 1);
+      const y = clamp((event.clientY - viewport.top) / viewport.height, 0, 1);
+      selectedLocation = {
+        longitude: view.left + x * view.longitudeSpan,
+        latitude: view.top - y * view.latitudeSpan
+      };
+      updateSelectedMarker(view.left, view.top, view.longitudeSpan, view.latitudeSpan);
+      updateWindDustReadings();
+      const placeMode = mapPickMode;
+      showReadings(selectedLocation.longitude, selectedLocation.latitude);
+
+      if (placeMode) {
+        placeLocations[placeMode] = { ...selectedLocation };
+        updatePlaceMarker(
+          placeMode === "current" ? currentMarker : destinationMarker,
+          placeLocations[placeMode],
+          view
+        );
+        if (placeMode === "current") {
+          document.getElementById("currentStatus").textContent = "SET";
+        } else {
+          destinationPanel.hidden = false;
+          sidePanel.classList.add("has-destination");
+        }
+        updateRouteDistance();
+        showReadings(selectedLocation.longitude, selectedLocation.latitude, placeMode);
+        setMapPickMode(null);
+      }
+
+      requestRender();
+    }
+
+    function setMapPickMode(mode) {
+      mapPickMode = mode;
+      setCurrentLocationButton.setAttribute("aria-pressed", String(mode === "current"));
+      addDestinationButton.setAttribute("aria-pressed", String(mode === "destination"));
+      mapStage.classList.toggle("selecting-location", Boolean(mode));
+
+      if (mode === "current") {
+        routeHint.textContent = "Current location selected — now click a point on the map.";
+        mapCaption.textContent = "Click the map to set your current location";
+        mapStage.focus({ preventScroll: true });
+      } else if (mode === "destination") {
+        routeHint.textContent = "Destination selected — now click a point on the map.";
+        mapCaption.textContent = "Click the map to add your destination";
+        mapStage.focus({ preventScroll: true });
+      } else {
+        routeHint.textContent = placeLocations.current || placeLocations.destination
+          ? "Choose another point to update a route location."
+          : "Choose a point, then click the map to place it.";
+      }
+    }
+
+    setCurrentLocationButton.addEventListener("click", () => {
+      setMapPickMode(mapPickMode === "current" ? null : "current");
+    });
+
+    addDestinationButton.addEventListener("click", () => {
+      setMapPickMode(mapPickMode === "destination" ? null : "destination");
+    });
+
+    function zoomAt(factor, x = 0.5, y = 0.5) {
+      const viewport = mapStage.getBoundingClientRect();
+      const previousView = getViewBounds(viewport);
+      mapView.zoom = clamp(mapView.zoom * factor, 1, 6);
+      const nextView = getViewBounds(viewport);
+      mapView.longitude += (x - 0.5) * (previousView.longitudeSpan - nextView.longitudeSpan);
+      mapView.latitude -= (y - 0.5) * (previousView.latitudeSpan - nextView.latitudeSpan);
+      constrainMapView(viewport);
+      requestRender();
+    }
+
+    document.getElementById("zoomIn").addEventListener("click", () => zoomAt(1.25));
+    document.getElementById("zoomOut").addEventListener("click", () => zoomAt(0.8));
+    document.getElementById("resetView").addEventListener("click", () => {
+      mapView = { ...initialView };
+      requestRender();
+    });
+    document.getElementById("resetButton").addEventListener("click", () => {
+      readingRequestIds.selected += 1;
+      selectedLocation = null;
+      pointMarker.style.display = "none";
+      document.getElementById("latitude").textContent = "—";
+      document.getElementById("longitude").textContent = "—";
+      document.getElementById("elevation").textContent = "— m";
+      document.getElementById("optical").textContent = "—";
+      document.getElementById("thermal").textContent = "— °C";
+      document.getElementById("pressure").textContent = "— Pa";
+      document.getElementById("radiation").textContent = "—";
+      ["elevation", "optical", "thermal", "pressure", "radiation"].forEach((id) => {
+        document.getElementById(id).classList.add("pending");
+      });
+      locationHint.textContent = "Click a point to read its NASA MOLA/HRSC elevation and map-model values.";
+      mapCaption.textContent = "Click the map to inspect a point";
+    });
+
+    mapStage.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0 ||
+          event.target.closest("button") || event.target.closest(".map-toolbar")) return;
+      dragStart = { x: event.clientX, y: event.clientY, longitude: mapView.longitude, latitude: mapView.latitude };
+      mapStage.setPointerCapture(event.pointerId);
+      mapStage.classList.add("dragging");
+    });
+    mapStage.addEventListener("pointermove", (event) => {
+      if (!dragStart) return;
+      const viewport = mapStage.getBoundingClientRect();
+      const view = getViewBounds(viewport);
+      mapView.longitude = dragStart.longitude - ((event.clientX - dragStart.x) / viewport.width) * view.longitudeSpan;
+      mapView.latitude = dragStart.latitude + ((event.clientY - dragStart.y) / viewport.height) * view.latitudeSpan;
+      constrainMapView(viewport);
+      requestRender();
+    });
+    mapStage.addEventListener("pointerup", (event) => {
+      if (!dragStart) return;
+      const moved = Math.hypot(event.clientX - dragStart.x, event.clientY - dragStart.y);
+      if (mapStage.hasPointerCapture(event.pointerId)) {
+        mapStage.releasePointerCapture(event.pointerId);
+      }
+      mapStage.classList.remove("dragging");
+      dragStart = null;
+      if (moved >= 5) {
+        suppressMapClick = true;
+        window.clearTimeout(suppressMapClickTimer);
+        suppressMapClickTimer = window.setTimeout(() => {
+          suppressMapClick = false;
+        }, 0);
+      }
+    });
+    mapStage.addEventListener("click", (event) => {
+      if (suppressMapClick) {
+        suppressMapClick = false;
+        window.clearTimeout(suppressMapClickTimer);
+        return;
+      }
+      if (event.target.closest("button") || event.target.closest(".map-toolbar")) return;
+
+      if (event.detail === 0) {
+        const viewport = mapStage.getBoundingClientRect();
+        selectMapLocation({
+          clientX: viewport.left + viewport.width / 2,
+          clientY: viewport.top + viewport.height / 2
+        });
+        return;
+      }
+      selectMapLocation(event);
+    });
+    mapStage.addEventListener("pointercancel", () => {
+      dragStart = null;
+      mapStage.classList.remove("dragging");
+    });
+    mapStage.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const bounds = mapStage.getBoundingClientRect();
+      const x = (event.clientX - bounds.left) / bounds.width;
+      const y = (event.clientY - bounds.top) / bounds.height;
+      zoomAt(event.deltaY < 0 ? 1.18 : 0.85, x, y);
+    }, { passive: false });
+    mapStage.addEventListener("keydown", (event) => {
+      const panAmount = 2 / mapView.zoom;
+      if (event.key === "ArrowLeft") mapView.longitude -= panAmount;
+      else if (event.key === "ArrowRight") mapView.longitude += panAmount;
+      else if (event.key === "ArrowUp") mapView.latitude += panAmount;
+      else if (event.key === "ArrowDown") mapView.latitude -= panAmount;
+      else if (event.key === "+" || event.key === "=") zoomAt(1.25);
+      else if (event.key === "-") zoomAt(0.8);
+      else return;
+      event.preventDefault();
+      requestRender();
+    });
+    new ResizeObserver(requestRender).observe(mapStage);
+    window.addEventListener("resize", requestRender);
+    updateLayerLegend(activeLayer);
+    Object.keys(mapImages).forEach((key) => {
+      mapImages[key].addEventListener("load", requestRender);
+      mapImages[key].addEventListener("error", () => {
+        mapStatus.textContent = `Could not load the NASA ${key} map asset.`;
+      });
+    });
+    mapImages.optical.src = new URL("assets/elysium-viking-map.jpg", document.baseURI).href;
+    mapImages.topographic.src = new URL("assets/elysium-mola-shaded-relief.png", document.baseURI).href;
+    requestRender();
+  </script>
+</body>
+</html>
