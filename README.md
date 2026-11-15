@@ -1,1 +1,0 @@
-# Parlayan_Yildizlar
